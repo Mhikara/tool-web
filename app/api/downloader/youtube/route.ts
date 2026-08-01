@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import ytdl from "@distube/ytdl-core";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 function nodeToWebStream(nodeStream: NodeJS.ReadableStream): ReadableStream {
   return new ReadableStream({
@@ -60,8 +61,11 @@ export async function POST(req: NextRequest) {
         "Content-Disposition": `attachment; filename="${safeTitle}.mp4"`,
       },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error(err);
-    return NextResponse.json({ error: "Gagal memproses video YouTube" }, { status: 500 });
+    return NextResponse.json(
+      { error: `Gagal memproses video YouTube: ${err?.message || "unknown error"}` },
+      { status: 500 }
+    );
   }
 }
