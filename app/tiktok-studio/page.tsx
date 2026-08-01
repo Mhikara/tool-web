@@ -1,8 +1,8 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function TiktokStudio() {
+function TiktokStudioContent() {
   const params = useSearchParams();
   const connected = params.get("connected") === "1";
 
@@ -62,7 +62,7 @@ export default function TiktokStudio() {
 
         <input
           type="text"
-          placeholder="URL video (harus bisa diakses publik, misal dari cloud storage)"
+          placeholder="URL video (harus bisa diakses publik)"
           value={videoUrl}
           onChange={(e) => setVideoUrl(e.target.value)}
           style={inputStyle}
@@ -83,9 +83,17 @@ export default function TiktokStudio() {
 
         <p style={{ marginTop: 24, fontSize: 11.5, color: "#6B6178", lineHeight: 1.6 }}>
           Catatan: video akan terkirim sebagai <b>Private (SELF_ONLY)</b> sampai app TikTok kamu
-          melewati proses audit resmi TikTok. Setelah diaudit, privacy_level bisa diubah ke publik.
+          melewati proses audit resmi TikTok.
         </p>
       </div>
     </div>
+  );
+}
+
+export default function TiktokStudio() {
+  return (
+    <Suspense fallback={<div style={{ background: "#0B0710", minHeight: "100vh" }} />}>
+      <TiktokStudioContent />
+    </Suspense>
   );
 }
