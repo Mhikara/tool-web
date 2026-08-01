@@ -149,7 +149,7 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
           placeholder={
             slug === "spotify" ? "Cari judul lagu atau artis..." :
             slug === "tiktok" && tiktokMode === "search" ? "Cari video TikTok berdasarkan judul..." :
-            `Paste link ${tool.title} di sini...`
+            `Paste link video atau Shorts YouTube di sini...`
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}
