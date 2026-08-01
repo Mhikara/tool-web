@@ -14,6 +14,8 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
   const [result, setResult] = useState<any>(null);
   const [tracks, setTracks] = useState<any[]>([]);
   const [spotifyUnavailable, setSpotifyUnavailable] = useState(false);
+  const [tiktokMode, setTiktokMode] = useState<"link" | "search">("link");
+  const [tiktokResults, setTiktokResults] = useState<any[]>([]);
 
   const wrap = { background: "#0B0710", minHeight: "100vh", color: "#F3EEFA", fontFamily: "sans-serif", padding: 24 };
   const inputStyle = {
@@ -24,10 +26,14 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
     width: "100%", padding: 12, borderRadius: 10, border: "none",
     background: "#A855F7", color: "#fff", fontWeight: 700,
   } as const;
+  const tabBtn = (active: boolean) => ({
+    flex: 1, padding: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)",
+    background: active ? "#A855F7" : "transparent", color: active ? "#fff" : "#9C90AC",
+    fontWeight: 600, fontSize: 13,
+  } as const);
 
   const handleYoutube = async (format: "mp4" | "mp3") => {
-    setLoading(true);
-    setStatus("Memproses...");
+    setLoading(true); setStatus("Memproses...");
     try {
       const res = await fetch("/api/downloader/youtube", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -40,9 +46,8 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
       link.download = `video.${format}`;
       link.click();
       setStatus("Selesai diunduh.");
-    } catch (e: any) {
-      setStatus(e.message || "Gagal memproses.");
-    } finally { setLoading(false); }
+    } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
+    finally { setLoading(false); }
   };
 
   const handleTiktok = async () => {
@@ -56,6 +61,21 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
       if (!res.ok) throw new Error(data.error);
       setResult(data); setStatus("");
     } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
+    finally { setLoading(false); }
+  };
+
+  const handleTiktokSearch = async () => {
+    setLoading(true); setStatus("Mencari..."); setTiktokResults([]);
+    try {
+      const res = await fetch("/api/downloader/tiktok-search", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword: input }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setTiktokResults(data.results || []);
+      setStatus(data.results?.length ? "" : "Tidak ada hasil.");
+    } catch (e: any) { setStatus(e.message || "Gagal mencari."); }
     finally { setLoading(false); }
   };
 
@@ -113,9 +133,24 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{tool.icon} {tool.title}</h1>
         <p style={{ color: "#9C90AC", fontSize: 13, marginBottom: 20 }}>{tool.description}</p>
 
+        {slug === "tiktok" && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+            <button onClick={() => { setTiktokMode("link"); setInput(""); setTiktokResults([]); setStatus(""); }} style={tabBtn(tiktokMode === "link")}>
+              Paste Link
+            </button>
+            <button onClick={() => { setTiktokMode("search"); setInput(""); setResult(null); setStatus(""); }} style={tabBtn(tiktokMode === "search")}>
+              Cari Judul
+            </button>
+          </div>
+        )}
+
         <input
           type="text"
-          placeholder={slug === "spotify" ? "Cari judul lagu atau artis..." : `Paste link ${tool.title} di sini...`}
+          placeholder={
+            slug === "spotify" ? "Cari judul lagu atau artis..." :
+            slug === "tiktok" && tiktokMode === "search" ? "Cari video TikTok berdasarkan judul..." :
+            `Paste link ${tool.title} di sini...`
+          }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           style={inputStyle}
@@ -127,7 +162,12 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
             <button disabled={loading} onClick={() => handleYoutube("mp3")} style={{ ...btnStyle, background: "#EC4899" }}>Download MP3</button>
           </div>
         )}
-        {slug === "tiktok" && <button disabled={loading} onClick={handleTiktok} style={btnStyle}>Ambil Video</button>}
+        {slug === "tiktok" && tiktokMode === "link" && (
+          <button disabled={loading} onClick={handleTiktok} style={btnStyle}>Ambil Video</button>
+        )}
+        {slug === "tiktok" && tiktokMode === "search" && (
+          <button disabled={loading} onClick={handleTiktokSearch} style={btnStyle}>Cari Video</button>
+        )}
         {slug === "instagram" && <button disabled={loading} onClick={handleInstagram} style={btnStyle}>Ambil Media</button>}
         {slug === "spotify" && <button disabled={loading} onClick={handleSpotifySearch} style={btnStyle}>Cari Lagu</button>}
         {slug === "terabox" && <button disabled={loading} onClick={handleTerabox} style={btnStyle}>Download</button>}
@@ -136,7 +176,7 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
 
         {spotifyUnavailable && (
           <div style={{ marginTop: 16, padding: 16, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: 12, fontSize: 13, color: "#C4B5FD" }}>
-            🔧 Fitur pencarian Spotify sedang belum aktif. Fitur lain (YouTube, TikTok, Instagram) tetap bisa dipakai normal.
+            🔧 Fitur pencarian Spotify sedang belum aktif. Fitur lain tetap bisa dipakai normal.
           </div>
         )}
 
@@ -154,6 +194,36 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
             {result.imageUrl && !result.videoUrl && (
               <a href={result.imageUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>Download Foto</a>
             )}
+          </div>
+        )}
+
+        {tiktokResults.length > 0 && (
+          <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+            {tiktokResults.map((v, i) => (
+              <div key={i} style={{ background: "#1C1226", borderRadius: 12, padding: 12 }}>
+                <div style={{ display: "flex", gap: 10 }}>
+                  {v.cover && <img src={v.cover} alt="" style={{ width: 60, height: 80, borderRadius: 8, objectFit: "cover" }} />}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      {v.title || "(tanpa judul)"}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#9C90AC", marginTop: 4 }}>{v.author}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  {v.videoUrl && (
+                    <a href={v.videoUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, textAlign: "center", textDecoration: "none", padding: 8, fontSize: 12 }}>
+                      Video
+                    </a>
+                  )}
+                  {v.audioUrl && (
+                    <a href={v.audioUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, textAlign: "center", textDecoration: "none", padding: 8, fontSize: 12, background: "#EC4899" }}>
+                      Audio
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -179,6 +249,7 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
         <p style={{ marginTop: 24, fontSize: 11.5, color: "#6B6178", lineHeight: 1.6 }}>
           {slug === "instagram" && "Catatan: hanya bekerja untuk post publik (bukan carousel/akun private)."}
           {slug === "terabox" && "Catatan: hanya bekerja jika link mengarah langsung ke file, bukan halaman share biasa."}
+          {slug === "tiktok" && tiktokMode === "search" && "Catatan: hasil pencarian tergantung ketersediaan layanan pihak ketiga."}
         </p>
       </div>
     </div>
