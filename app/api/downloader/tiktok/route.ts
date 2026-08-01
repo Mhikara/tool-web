@@ -6,18 +6,15 @@ export async function POST(req: NextRequest) {
     if (!url) {
       return NextResponse.json({ error: "Link TikTok wajib diisi" }, { status: 400 });
     }
-
     const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
     const data = await res.json();
-
     if (data.code !== 0 || !data.data) {
       return NextResponse.json({ error: "Gagal mengambil data TikTok, cek kembali link-nya" }, { status: 500 });
     }
-
     return NextResponse.json({
       title: data.data.title,
       cover: data.data.cover,
-      videoUrl: data.data.play, // tanpa watermark
+      videoUrl: data.data.play,
       audioUrl: data.data.music,
     });
   } catch (err) {

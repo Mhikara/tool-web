@@ -15,12 +15,10 @@ function nodeToWebStream(nodeStream: NodeJS.ReadableStream): ReadableStream {
 
 export async function POST(req: NextRequest) {
   try {
-    const { url, format } = await req.json(); // format: "mp3" | "mp4"
-
+    const { url, format } = await req.json();
     if (!url || !ytdl.validateURL(url)) {
       return NextResponse.json({ error: "Link YouTube tidak valid" }, { status: 400 });
     }
-
     const info = await ytdl.getInfo(url);
     const safeTitle = info.videoDetails.title.replace(/[^\w\s-]/g, "").slice(0, 60);
 
