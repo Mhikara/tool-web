@@ -1,8 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { MakerTool } from "@/lib/makerTools";
+import { getToolBySlug } from "@/lib/makerTools";
+import { notFound } from "next/navigation";
 
-export default function MakerCanvas({ tool }: { tool: MakerTool }) {
+export default function MakerCanvas({ slug }: { slug: string }) {
+  const tool = getToolBySlug(slug);
+  if (!tool) return notFound();
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries(tool.fields.map((f) => [f.name, f.default || ""]))

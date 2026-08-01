@@ -1,42 +1,54 @@
-const [spotifyUnavailable, setSpotifyUnavailable] = useState(false);
+import { NextRequest, NextResponse } from "next/server";
 
-const handleSpotifySearch = async () => {
-  setLoading(true);
-  setStatus("Mencari...");
-  setTracks([]);
-  setSpotifyUnavailable(false);
+async function getSpotifyToken() {
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization:
+        "Basic " +
+        Buffer.from(
+          `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+        ).toString("base64"),
+    },
+    body: "grant_type=client_credentials",
+  });
+  const data = await res.json();
+  return data.access_token as string;
+}
+
+export async function POST(req: NextRequest) {
   try {
-    const res = await fetch("/api/downloader/spotify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: input }),
-    });
-    const data = await res.json();
-    if (data.unavailable) {
-      setSpotifyUnavailable(true);
-      setStatus("");
-{spotifyUnavailable && (
-  <div style={{
-    marginTop: 16,
-    padding: 16,
-    background: "rgba(168,85,247,0.1)",
-    border: "1px solid rgba(168,85,247,0.3)",
-    borderRadius: 12,
-    fontSize: 13,
-    color: "#C4B5FD",
-  }}>
-    🔧 Fitur pencarian Spotify sedang belum aktif — Spotify sementara menahan
-    pembuatan akses developer baru. Fitur lain (YouTube, TikTok, Instagram) tetap bisa dipakai normal.
-  </div>
-)}
-      return;
+    if (!process.env.SPOTIFY_CLIENT_ID || !process.env.SPOTIFY_CLIENT_SECRET) {
+      return NextResponse.json(
+        { unavailable: true, error: "Fitur pencarian Spotify belum aktif." },
+        { status: 503 }
+      );
     }
-    if (!res.ok) throw new Error(data.error);
-    setTracks(data.tracks || []);
-    setStatus(data.tracks?.length ? "" : "Tidak ada hasil.");
-  } catch (e: any) {
-    setStatus(e.message || "Gagal mencari.");
-  } finally {
-    setLoading(false);
+
+    const { query } = await req.json();
+    if (!query) {
+      return NextResponse.json({ error: "Kata kunci pencarian wajib diisi" }, { status: 400 });
+    }
+
+    const token = await getSpotifyToken();
+    const res = await fetch(
+      `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=6`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    const data = await res.json();
+
+    const tracks = (data.tracks?.items || []).map((t: any) => ({
+      name: t.name,
+      artist: t.artists.map((a: any) => a.name).join(", "),
+      cover: t.album.images?.[2]?.url || t.album.images?.[0]?.url,
+      previewUrl: t.preview_url,
+      spotifyUrl: t.external_urls.spotify,
+    }));
+
+    return NextResponse.json({ tracks });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "Gagal mencari lagu di Spotify" }, { status: 500 });
   }
-};
+}

@@ -13,41 +13,27 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [tracks, setTracks] = useState<any[]>([]);
+  const [spotifyUnavailable, setSpotifyUnavailable] = useState(false);
 
   const wrap = { background: "#0B0710", minHeight: "100vh", color: "#F3EEFA", fontFamily: "sans-serif", padding: 24 };
   const inputStyle = {
-    width: "100%",
-    padding: 12,
-    marginBottom: 12,
-    borderRadius: 10,
-    border: "1px solid rgba(255,255,255,0.1)",
-    background: "#1C1226",
-    color: "#F3EEFA",
+    width: "100%", padding: 12, marginBottom: 12, borderRadius: 10,
+    border: "1px solid rgba(255,255,255,0.1)", background: "#1C1226", color: "#F3EEFA",
   } as const;
   const btnStyle = {
-    width: "100%",
-    padding: 12,
-    borderRadius: 10,
-    border: "none",
-    background: "#A855F7",
-    color: "#fff",
-    fontWeight: 700,
+    width: "100%", padding: 12, borderRadius: 10, border: "none",
+    background: "#A855F7", color: "#fff", fontWeight: 700,
   } as const;
 
-  // ---- YOUTUBE ----
   const handleYoutube = async (format: "mp4" | "mp3") => {
     setLoading(true);
     setStatus("Memproses...");
     try {
       const res = await fetch("/api/downloader/youtube", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: input, format }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error);
-      }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
       const blob = await res.blob();
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
@@ -56,190 +42,121 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
       setStatus("Selesai diunduh.");
     } catch (e: any) {
       setStatus(e.message || "Gagal memproses.");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  // ---- TIKTOK ----
   const handleTiktok = async () => {
-    setLoading(true);
-    setStatus("Memproses...");
-    setResult(null);
+    setLoading(true); setStatus("Memproses..."); setResult(null);
     try {
       const res = await fetch("/api/downloader/tiktok", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: input }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setResult(data);
-      setStatus("");
-    } catch (e: any) {
-      setStatus(e.message || "Gagal memproses.");
-    } finally {
-      setLoading(false);
-    }
+      setResult(data); setStatus("");
+    } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
+    finally { setLoading(false); }
   };
 
-  // ---- INSTAGRAM ----
   const handleInstagram = async () => {
-    setLoading(true);
-    setStatus("Memproses...");
-    setResult(null);
+    setLoading(true); setStatus("Memproses..."); setResult(null);
     try {
       const res = await fetch("/api/downloader/instagram", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: input }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setResult(data);
-      setStatus("");
-    } catch (e: any) {
-      setStatus(e.message || "Gagal memproses.");
-    } finally {
-      setLoading(false);
-    }
+      setResult(data); setStatus("");
+    } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
+    finally { setLoading(false); }
   };
 
-  // ---- SPOTIFY (search) ----
   const handleSpotifySearch = async () => {
-    setLoading(true);
-    setStatus("Mencari...");
-    setTracks([]);
+    setLoading(true); setStatus("Mencari..."); setTracks([]); setSpotifyUnavailable(false);
     try {
       const res = await fetch("/api/downloader/spotify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: input }),
       });
       const data = await res.json();
+      if (data.unavailable) { setSpotifyUnavailable(true); setStatus(""); return; }
       if (!res.ok) throw new Error(data.error);
       setTracks(data.tracks || []);
       setStatus(data.tracks?.length ? "" : "Tidak ada hasil.");
-    } catch (e: any) {
-      setStatus(e.message || "Gagal mencari.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { setStatus(e.message || "Gagal mencari."); }
+    finally { setLoading(false); }
   };
 
-  // ---- TERABOX ----
   const handleTerabox = async () => {
-    setLoading(true);
-    setStatus("Memproses...");
+    setLoading(true); setStatus("Memproses...");
     try {
       const res = await fetch("/api/downloader/terabox", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: input }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error);
-      }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
       const blob = await res.blob();
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = "terabox-file";
       link.click();
       setStatus("Selesai diunduh.");
-    } catch (e: any) {
-      setStatus(e.message || "Gagal memproses.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
+    finally { setLoading(false); }
   };
 
   return (
     <div style={wrap}>
       <div style={{ maxWidth: 480, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>
-          {tool.icon} {tool.title}
-        </h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{tool.icon} {tool.title}</h1>
         <p style={{ color: "#9C90AC", fontSize: 13, marginBottom: 20 }}>{tool.description}</p>
 
-        {/* INPUT */}
         <input
           type="text"
-          placeholder={
-            slug === "spotify" ? "Cari judul lagu atau artis..." : `Paste link ${tool.title} di sini...`
-          }
+          placeholder={slug === "spotify" ? "Cari judul lagu atau artis..." : `Paste link ${tool.title} di sini...`}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           style={inputStyle}
         />
 
-        {/* ACTION BUTTONS PER PLATFORM */}
         {slug === "youtube" && (
           <div style={{ display: "flex", gap: 10 }}>
-            <button disabled={loading} onClick={() => handleYoutube("mp4")} style={btnStyle}>
-              Download MP4
-            </button>
-            <button disabled={loading} onClick={() => handleYoutube("mp3")} style={{ ...btnStyle, background: "#EC4899" }}>
-              Download MP3
-            </button>
+            <button disabled={loading} onClick={() => handleYoutube("mp4")} style={btnStyle}>Download MP4</button>
+            <button disabled={loading} onClick={() => handleYoutube("mp3")} style={{ ...btnStyle, background: "#EC4899" }}>Download MP3</button>
           </div>
         )}
-
-        {slug === "tiktok" && (
-          <button disabled={loading} onClick={handleTiktok} style={btnStyle}>
-            Ambil Video
-          </button>
-        )}
-
-        {slug === "instagram" && (
-          <button disabled={loading} onClick={handleInstagram} style={btnStyle}>
-            Ambil Media
-          </button>
-        )}
-
-        {slug === "spotify" && (
-          <button disabled={loading} onClick={handleSpotifySearch} style={btnStyle}>
-            Cari Lagu
-          </button>
-        )}
-
-        {slug === "terabox" && (
-          <button disabled={loading} onClick={handleTerabox} style={btnStyle}>
-            Download
-          </button>
-        )}
+        {slug === "tiktok" && <button disabled={loading} onClick={handleTiktok} style={btnStyle}>Ambil Video</button>}
+        {slug === "instagram" && <button disabled={loading} onClick={handleInstagram} style={btnStyle}>Ambil Media</button>}
+        {slug === "spotify" && <button disabled={loading} onClick={handleSpotifySearch} style={btnStyle}>Cari Lagu</button>}
+        {slug === "terabox" && <button disabled={loading} onClick={handleTerabox} style={btnStyle}>Download</button>}
 
         {status && <p style={{ marginTop: 12, fontSize: 13, color: "#9C90AC" }}>{status}</p>}
 
-        {/* RESULT: TikTok / Instagram */}
+        {spotifyUnavailable && (
+          <div style={{ marginTop: 16, padding: 16, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: 12, fontSize: 13, color: "#C4B5FD" }}>
+            🔧 Fitur pencarian Spotify sedang belum aktif. Fitur lain (YouTube, TikTok, Instagram) tetap bisa dipakai normal.
+          </div>
+        )}
+
         {result && (slug === "tiktok" || slug === "instagram") && (
           <div style={{ marginTop: 20, background: "#1C1226", borderRadius: 12, padding: 16 }}>
             {(result.cover || result.imageUrl) && (
-              <img
-                src={result.cover || result.imageUrl}
-                alt="preview"
-                style={{ width: "100%", borderRadius: 8, marginBottom: 12 }}
-              />
+              <img src={result.cover || result.imageUrl} alt="preview" style={{ width: "100%", borderRadius: 8, marginBottom: 12 }} />
             )}
             {result.videoUrl && (
-              <a href={result.videoUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", marginBottom: 8 }}>
-                Download Video
-              </a>
+              <a href={result.videoUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", marginBottom: 8 }}>Download Video</a>
             )}
             {result.audioUrl && (
-              <a href={result.audioUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "#EC4899" }}>
-                Download Audio
-              </a>
+              <a href={result.audioUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "#EC4899" }}>Download Audio</a>
             )}
             {result.imageUrl && !result.videoUrl && (
-              <a href={result.imageUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>
-                Download Foto
-              </a>
+              <a href={result.imageUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>Download Foto</a>
             )}
           </div>
         )}
 
-        {/* RESULT: Spotify tracks */}
         {tracks.length > 0 && (
           <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
             {tracks.map((t, i) => (
@@ -256,10 +173,6 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
                 </div>
               </div>
             ))}
-            <p style={{ fontSize: 11, color: "#6B6178", marginTop: 4 }}>
-              *Ini adalah preview resmi 30 detik dari Spotify. Download full-track MP3 tidak didukung
-              karena melanggar hak cipta/DRM.
-            </p>
           </div>
         )}
 
