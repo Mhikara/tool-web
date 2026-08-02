@@ -228,7 +228,18 @@ export default function Dashboard() {
               ))}
             </div>
           </section>
-        )}
+      )}
+
+      {showTools && (
+        <section style={{ background: "#1C1226", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 18, marginBottom: 16 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>🛠️ Tools</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
+            {toolsList.map((tool) => (
+              <ToolCard key={tool.slug} href={tool.href} icon={tool.icon} title={tool.title} desc={tool.description} tag={tool.tag} />
+            ))}
+          </div>
+        </section>
+      )}
 
         {showEmpty && (
           <section style={{ textAlign: "center", padding: "60px 20px", color: "#6B6178" }}>
