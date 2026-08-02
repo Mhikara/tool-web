@@ -189,10 +189,10 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
               <a href={result.videoUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", marginBottom: 8 }}>Download Video</a>
             )}
             {result.audioUrl && (
-              <a href={result.audioUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "#EC4899" }}>Download Audio</a>
+              <a href={`/api/downloader/tiktok/file?url=${encodeURIComponent(result.audioUrl)}&filename=tiktok-audio.mp3`} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "#EC4899" }}>Download Audio</a>
             )}
             {result.imageUrl && !result.videoUrl && (
-              <a href={result.imageUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>Download Foto</a>
+              <a href={`/api/downloader/tiktok/file?url=${encodeURIComponent(result.imageUrl)}&filename=tiktok-foto.jpg`} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>Download Foto</a>
             )}
           </div>
         )}
@@ -212,12 +212,12 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                   {v.videoUrl && (
-                    <a href={v.videoUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, textAlign: "center", textDecoration: "none", padding: 8, fontSize: 12 }}>
+                    <a href={`/api/downloader/tiktok/file?url=${encodeURIComponent(v.videoUrl)}&filename=tiktok-video-${i+1}.mp4`} download target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, textAlign: "center", textDecoration: "none", padding: 8, fontSize: 12 }}>
                       Video
                     </a>
                   )}
                   {v.audioUrl && (
-                    <a href={v.audioUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, textAlign: "center", textDecoration: "none", padding: 8, fontSize: 12, background: "#EC4899" }}>
+                    <a href={`/api/downloader/tiktok/file?url=${encodeURIComponent(v.audioUrl)}&filename=tiktok-audio-${i+1}.mp3`} download target="_blank" rel="noreferrer" style={{ ...btnStyle, flex: 1, textAlign: "center", textDecoration: "none", padding: 8, fontSize: 12, background: "#EC4899" }}>
                       Audio
                     </a>
                   )}
