@@ -105,7 +105,7 @@ export const makerTools: MakerTool[] = [
     icon: "✨",
     fields: [{ name: "teks", label: "Teks", placeholder: "tulis sesuatu", default: "brat" }],
     draw: (ctx, w, h, v) => {
-      ctx.fillStyle = "#c5f467";
+      ctx.fillStyle = "#000";
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = "#000";
       ctx.font = "900 46px Arial";
