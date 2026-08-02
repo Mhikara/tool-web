@@ -11,6 +11,7 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
   const [input, setInput] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [extractingAudio, setExtractingAudio] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [tracks, setTracks] = useState<any[]>([]);
   const [spotifyUnavailable, setSpotifyUnavailable] = useState(false);
@@ -77,6 +78,28 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
       setStatus(data.results?.length ? "" : "Tidak ada hasil.");
     } catch (e: any) { setStatus(e.message || "Gagal mencari."); }
     finally { setLoading(false); }
+  };
+
+  const handleExtractAudio = async () => {
+    if (!result?.videoUrl) return;
+    setExtractingAudio(true);
+    try {
+      const res = await fetch("/api/downloader/instagram/audio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl: result.videoUrl }),
+      });
+      if (!res.ok) throw new Error("Gagal mengekstrak audio");
+      const blob = await res.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "instagram-audio.mp3";
+      link.click();
+    } catch (err) {
+      setStatus("Gagal mengekstrak audio dari video.");
+    } finally {
+      setExtractingAudio(false);
+    }
   };
 
   const handleInstagram = async () => {
