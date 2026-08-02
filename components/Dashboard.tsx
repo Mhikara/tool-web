@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { downloaderTools } from "@/lib/downloaderTools";
 import { makerTools } from "@/lib/makerTools";
+import { externalTools } from "@/lib/externalTools";
 
 type TabKey = "all" | "downloader" | "maker" | "tools" | "vault" | "external";
 
@@ -68,11 +69,11 @@ export default function Dashboard() {
 
   const showDownloader = tab === "all" || tab === "downloader";
   const showMaker = tab === "all" || tab === "maker";
-  const showEmpty = tab === "tools" || tab === "vault" || tab === "external";
+  const showExternal = tab === "all" || tab === "external";
+  const showEmpty = tab === "tools" || tab === "vault";
 
   return (
     <div style={{ background: "#0B0710", minHeight: "100vh", color: "#F3EEFA", fontFamily: "sans-serif" }}>
-      {/* HEADER */}
       <header style={{ display: "flex", alignItems: "center", gap: 12, padding: "20px 20px 14px" }}>
         <div
           style={{
@@ -108,7 +109,6 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* PROFILE BANNER */}
       <div
         style={{
           margin: "4px 20px 18px",
@@ -156,7 +156,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* SEARCH (visual only) */}
       <div
         style={{
           margin: "0 20px 16px",
@@ -171,16 +170,8 @@ export default function Dashboard() {
         🔍 Cari fitur, alat, atau layanan...
       </div>
 
-      {/* TAB NAV */}
       <div style={{ position: "relative", marginBottom: 22 }}>
-        <div
-          style={{
-            display: "flex",
-            gap: 9,
-            padding: "0 20px",
-            overflowX: "auto",
-          }}
-        >
+        <div style={{ display: "flex", gap: 9, padding: "0 20px", overflowX: "auto" }}>
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -209,14 +200,7 @@ export default function Dashboard() {
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>⬇️ Downloader</h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {downloaderTools.map((tool) => (
-                <ToolCard
-                  key={tool.slug}
-                  href={`/downloader/${tool.slug}`}
-                  icon={tool.icon}
-                  title={tool.title}
-                  desc={tool.description}
-                  tag={tool.tag}
-                />
+                <ToolCard key={tool.slug} href={`/downloader/${tool.slug}`} icon={tool.icon} title={tool.title} desc={tool.description} tag={tool.tag} />
               ))}
             </div>
           </section>
@@ -227,14 +211,18 @@ export default function Dashboard() {
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>✨ Maker</h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               {makerTools.map((tool) => (
-                <ToolCard
-                  key={tool.slug}
-                  href={`/maker/${tool.slug}`}
-                  icon={tool.icon}
-                  title={tool.title}
-                  desc={tool.description}
-                  tag={tool.tag}
-                />
+                <ToolCard key={tool.slug} href={`/maker/${tool.slug}`} icon={tool.icon} title={tool.title} desc={tool.description} tag={tool.tag} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {showExternal && (
+          <section style={{ marginBottom: 32 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>🔗 External Tools</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {externalTools.map((tool) => (
+                <ToolCard key={tool.slug} href={`/external/${tool.slug}`} icon={tool.icon} title={tool.title} desc={tool.description} tag={tool.tag} />
               ))}
             </div>
           </section>
@@ -248,29 +236,12 @@ export default function Dashboard() {
         )}
 
         {(tab === "all" || tab === "downloader") && (
-          <section
-            style={{
-              background: "#1C1226",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 16,
-              padding: 18,
-            }}
-          >
+          <section style={{ background: "#1C1226", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <span style={{ fontWeight: 700, fontSize: 14 }}>↺ History Download</span>
               <span style={{ fontSize: 12, color: "#6B6178" }}>0</span>
             </div>
-            <div
-              style={{
-                background: "rgba(255,255,255,0.03)",
-                border: "1px dashed rgba(255,255,255,0.1)",
-                borderRadius: 12,
-                padding: 16,
-                fontSize: 12.5,
-                color: "#9C90AC",
-                textAlign: "center",
-              }}
-            >
+            <div style={{ background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 12, padding: 16, fontSize: 12.5, color: "#9C90AC", textAlign: "center" }}>
               Belum ada riwayat. Download akan muncul di sini.
             </div>
           </section>
