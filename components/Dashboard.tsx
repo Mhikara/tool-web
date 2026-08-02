@@ -4,6 +4,7 @@ import Link from "next/link";
 import { downloaderTools } from "@/lib/downloaderTools";
 import { makerTools } from "@/lib/makerTools";
 import { externalTools } from "@/lib/externalTools";
+import { toolsList } from "@/lib/toolsList";
 
 type TabKey = "all" | "downloader" | "maker" | "tools" | "vault" | "external";
 
@@ -70,7 +71,8 @@ export default function Dashboard() {
   const showDownloader = tab === "all" || tab === "downloader";
   const showMaker = tab === "all" || tab === "maker";
   const showExternal = tab === "all" || tab === "external";
-  const showEmpty = tab === "tools" || tab === "vault";
+  const showTools = tab === "all" || tab === "tools";
+  const showEmpty = tab === "vault";
 
   return (
     <div style={{ background: "#0B0710", minHeight: "100vh", color: "#F3EEFA", fontFamily: "sans-serif" }}>
