@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
       },
     });
     const html = await res.text();
+    console.log("IG_HTML_LENGTH:", html.length, "SNIPPET:", html.slice(0, 300));
 
     const videoUrl = extractMeta(html, ["og:video", "og:video:secure_url", "og:video:url"]);
     const imageUrl = extractMeta(html, ["og:image", "og:image:secure_url"]);
