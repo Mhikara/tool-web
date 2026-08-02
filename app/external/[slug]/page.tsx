@@ -18,12 +18,17 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
     width: "100%", padding: 12, borderRadius: 10, border: "none",
     background: "#A855F7", color: "#fff", fontWeight: 700,
   } as const;
+  const tabBtn = (active: boolean) => ({
+    flex: 1, padding: 10, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)",
+    background: active ? "#A855F7" : "transparent", color: active ? "#fff" : "#9C90AC",
+    fontWeight: 600, fontSize: 13,
+  } as const);
 
-  // ---- Get Code HTML ----
   const [htmlUrl, setHtmlUrl] = useState("");
   const [htmlSource, setHtmlSource] = useState("");
   const [htmlStatus, setHtmlStatus] = useState("");
   const [htmlLoading, setHtmlLoading] = useState(false);
+  const [htmlView, setHtmlView] = useState<"source" | "preview">("source");
 
   const handleGetHtml = async () => {
     setHtmlLoading(true); setHtmlStatus("Mengambil..."); setHtmlSource("");
@@ -35,6 +40,7 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setHtmlSource(data.html);
+      setHtmlView("preview");
       setHtmlStatus("");
     } catch (e: any) { setHtmlStatus(e.message || "Gagal mengambil."); }
     finally { setHtmlLoading(false); }
@@ -53,7 +59,6 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
     link.click();
   };
 
-  // ---- Web Encryption ----
   const [rawHtml, setRawHtml] = useState("");
   const [encryptedHtml, setEncryptedHtml] = useState("");
 
@@ -67,7 +72,6 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
     navigator.clipboard.writeText(encryptedHtml);
   };
 
-  // ---- Foto To Link ----
   const [uploadStatus, setUploadStatus] = useState("");
   const [uploadedUrl, setUploadedUrl] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -91,7 +95,6 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
     }
   };
 
-  // ---- Nexus AI (chat pakai endpoint AI Maker yang sudah ada) ----
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiResult, setAiResult] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -133,15 +136,45 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
         {slug === "get-code-html" && (
           <div>
             <input type="text" placeholder="https://contoh.com" value={htmlUrl} onChange={(e) => setHtmlUrl(e.target.value)} style={inputStyle} />
-            <button disabled={htmlLoading} onClick={handleGetHtml} style={btnStyle}>Ambil Source Code</button>
+            <button disabled={htmlLoading} onClick={handleGetHtml} style={btnStyle}>
+              {htmlLoading ? "Mengambil..." : "Ambil Source Code"}
+            </button>
             {htmlStatus && <p style={{ marginTop: 12, fontSize: 13, color: "#9C90AC" }}>{htmlStatus}</p>}
+
             {htmlSource && (
               <>
-                <textarea readOnly value={htmlSource} rows={12} style={{ ...inputStyle, marginTop: 16, fontFamily: "monospace", fontSize: 11 }} />
+                <div style={{ display: "flex", gap: 8, marginTop: 16, marginBottom: 12 }}>
+                  <button onClick={() => setHtmlView("preview")} style={tabBtn(htmlView === "preview")}>👁️ Preview</button>
+                  <button onClick={() => setHtmlView("source")} style={tabBtn(htmlView === "source")}>{"</>"} Source</button>
+                </div>
+
+                {htmlView === "preview" && (
+                  <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", marginBottom: 12 }}>
+                    <iframe
+                      srcDoc={htmlSource}
+                      sandbox=""
+                      style={{ width: "100%", height: 420, border: "none", background: "#fff" }}
+                      title="Preview halaman"
+                    />
+                  </div>
+                )}
+
+                {htmlView === "source" && (
+                  <textarea
+                    readOnly
+                    value={htmlSource}
+                    rows={14}
+                    style={{ ...inputStyle, fontFamily: "monospace", fontSize: 11, marginBottom: 12 }}
+                  />
+                )}
+
                 <div style={{ display: "flex", gap: 10 }}>
                   <button onClick={handleCopyHtml} style={{ ...btnStyle, background: "#374151" }}>Copy</button>
                   <button onClick={handleDownloadHtml} style={btnStyle}>Download .html</button>
                 </div>
+                <p style={{ fontSize: 11, color: "#6B6178", marginTop: 8 }}>
+                  Preview berjalan dalam sandbox terisolasi (tanpa JavaScript/cookie) — hanya untuk cek tampilan visual.
+                </p>
               </>
             )}
           </div>
@@ -149,11 +182,7 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
 
         {slug === "deploy-update-web" && (
           <div style={{ padding: 16, background: "#1C1226", borderRadius: 12, fontSize: 13, color: "#9C90AC", lineHeight: 1.7 }}>
-            Deploy otomatis dari sini butuh <b>Vercel Deploy Hook</b> (URL rahasia dari project Vercel kamu).
-            Setelah kamu buat Deploy Hook di Vercel → Settings → Git → Deploy Hooks, tempel URL-nya di
-            <code style={{ background: "#0B0710", padding: "2px 6px", borderRadius: 4 }}> .env.local</code> sebagai
-            <code style={{ background: "#0B0710", padding: "2px 6px", borderRadius: 4 }}> VERCEL_DEPLOY_HOOK_URL</code>,
-            lalu beri tahu saya untuk saya buatkan tombol trigger redeploy-nya.
+            Deploy otomatis dari sini butuh <b>Vercel Deploy Hook</b>. Buat dulu di Vercel → Settings → Git → Deploy Hooks.
           </div>
         )}
 
@@ -190,10 +219,6 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
               <>
                 <textarea readOnly value={encryptedHtml} rows={6} style={{ ...inputStyle, marginTop: 16, fontFamily: "monospace", fontSize: 11 }} />
                 <button onClick={handleCopyEncrypted} style={{ ...btnStyle, background: "#374151" }}>Copy Hasil</button>
-                <p style={{ fontSize: 11, color: "#6B6178", marginTop: 8 }}>
-                  Catatan: ini obfuscation ringan (base64), bukan enkripsi kriptografis — mencegah HTML terbaca sekilas,
-                  bukan proteksi keamanan penuh.
-                </p>
               </>
             )}
           </div>
@@ -205,10 +230,9 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
             <ol style={{ paddingLeft: 20, marginBottom: 12 }}>
               <li>Buka aplikasi WhatsApp, akan muncul layar "Nomor Anda diblokir"</li>
               <li>Ketuk tombol untuk mengirim banding lewat email ke tim WhatsApp</li>
-              <li>Jelaskan situasinya dengan sopan (misal: pakai WhatsApp Business tanpa maksud spam)</li>
+              <li>Jelaskan situasinya dengan sopan</li>
               <li>Tunggu balasan, biasanya dalam beberapa hari</li>
             </ol>
-            <p>Hindari pakai aplikasi WhatsApp modifikasi (GB WhatsApp dll) karena itu penyebab paling umum banned permanen dan sulit diajukan banding.</p>
           </div>
         )}
       </div>
