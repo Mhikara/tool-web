@@ -24,4 +24,28 @@ export const toolsList: SimpleTool[] = [
     icon: "📧",
     href: "/tools/vyn-mail",
   },
+  {
+    slug: "virus-scan",
+    title: "Virus Scan",
+    description: "Scan URL, domain & IP",
+    tag: "SECURITY",
+    icon: "🛡️",
+    href: "/tools/virus-scan",
+  },
+  {
+    slug: "ai-chat",
+    title: "Nexus AI",
+    description: "Chat AI model gratis",
+    tag: "AI",
+    icon: "🤖",
+    href: "/tools/ai-chat",
+  },
+  {
+    slug: "web-encrypt",
+    title: "Web Encryption",
+    description: "Enkripsi & lindungi source HTML",
+    tag: "SECURE",
+    icon: "🔒",
+    href: "/tools/web-encrypt",
+  },
 ];
