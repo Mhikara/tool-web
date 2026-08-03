@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import ffmpegPath from "ffmpeg-static";
 import ffmpeg from "fluent-ffmpeg";
-const archiver = require("archiver");
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -21,7 +20,12 @@ function getVideoDuration(filePath: string): Promise<number> {
   });
 }
 
-function cutClip(inputPath: string, outputPath: string, start: number, duration: number): Promise<void> {
+function cutClip(
+  inputPath: string,
+  outputPath: string,
+  start: number,
+  duration: number
+): Promise<void> {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .setStartTime(start)
@@ -43,7 +47,10 @@ export async function POST(req: NextRequest) {
     const clipDuration = Number(formData.get("clipDuration")) || 30;
 
     if (!file) {
-      return NextResponse.json({ error: "File video wajib diupload" }, { status: 400 });
+      return NextResponse.json(
+        { error: "File video wajib diupload" },
+        { status: 400 }
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -51,11 +58,18 @@ export async function POST(req: NextRequest) {
 
     const totalDuration = await getVideoDuration(inputPath);
     if (!totalDuration || totalDuration <= 0) {
-      return NextResponse.json({ error: "Tidak bisa membaca durasi video" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Tidak bisa membaca durasi video" },
+        { status: 400 }
+      );
     }
 
+    // Import ESM archiver secara dinamis (fix webpack error)
+    const archiverMod = await import("archiver");
+    const archiver = archiverMod.default || archiverMod;
+
     const clipCount = Math.ceil(totalDuration / clipDuration);
-    const maxClips = 15; // batas aman supaya tidak timeout di server gratis
+    const maxClips = 15;
     const clampedCount = Math.min(clipCount, maxClips);
 
     const archive = archiver("zip", { zlib: { level: 9 } });
@@ -68,9 +82,9 @@ export async function POST(req: NextRequest) {
       const duration = Math.min(clipDuration, remaining);
       if (duration <= 0) break;
 
-      const clipPath = path.join(tempDir, `clip-${i + 1}.mp4`);
+      const clipPath = path.join(tempDir, "clip-" + (i + 1) + ".mp4");
       await cutClip(inputPath, clipPath, start, duration);
-      archive.file(clipPath, { name: `clip-${i + 1}.mp4` });
+      archive.file(clipPath, { name: "clip-" + (i + 1) + ".mp4" });
     }
 
     archive.finalize();
@@ -86,14 +100,16 @@ export async function POST(req: NextRequest) {
     return new NextResponse(zipBuffer, {
       headers: {
         "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="clips.zip"`,
+        "Content-Disposition": 'attachment; filename="clips.zip"',
       },
     });
   } catch (err: any) {
     console.error(err);
-    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch {}
     return NextResponse.json(
-      { error: `Gagal memproses video: ${err?.message || "unknown error"}` },
+      { error: "Gagal memproses video: " + (err?.message || "unknown error") },
       { status: 500 }
     );
   }
