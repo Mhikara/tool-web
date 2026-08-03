@@ -16,4 +16,12 @@ export const toolsList: SimpleTool[] = [
     icon: "✂️",
     href: "/tools/auto-clip",
   },
+  {
+    slug: "vyn-mail",
+    title: "VYN-Mail",
+    description: "Email sementara dengan inbox otomatis",
+    tag: "MAIL",
+    icon: "📧",
+    href: "/tools/vyn-mail",
+  },
 ];
