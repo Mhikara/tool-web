@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { login, domain, address } = await generateAddress();
+    const { address, sidToken } = await generateAddress();
     const res = NextResponse.json({ address });
 
     const cookieOpts = {
@@ -36,8 +36,7 @@ export async function POST(req: NextRequest) {
       maxAge: 60 * 60 * 24,
     };
 
-    res.cookies.set("vynmail_login", login, cookieOpts);
-    res.cookies.set("vynmail_domain", domain, cookieOpts);
+    res.cookies.set("vynmail_sid", sidToken, cookieOpts);
     res.cookies.set("vynmail_address", address, { ...cookieOpts, httpOnly: false });
 
     return res;

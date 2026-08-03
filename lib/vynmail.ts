@@ -1,63 +1,71 @@
 // lib/vynmail.ts
-// Client tipis untuk 1secmail temporary email API (https://www.1secmail.com/api/)
-// Dipilih karena TIDAK perlu proses buat-akun (no account/token step),
-// sehingga jauh lebih tahan terhadap blokir IP data center dibanding
-// provider yang mewajibkan registrasi seperti mail.tm.
+// Client tipis untuk Guerrilla Mail API (https://www.guerrillamail.com/GuerrillaMailAPI.html)
+// Provider ke-3 setelah mail.tm (502) dan 1secmail (403) gagal.
+// User-Agent eksplisit ditambahkan karena banyak temp-mail API menolak
+// request server-side tanpa header ini.
 
-const ONESEC_BASE = "https://www.1secmail.com/api/v1";
+const GM_BASE = "https://api.guerrillamail.com/ajax.php";
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) VynMailBot/1.0";
 
-export interface TempAddress {
-  login: string;
-  domain: string;
+export interface GmAddress {
   address: string;
+  sidToken: string;
 }
 
-export interface TempMessageSummary {
-  id: number;
+export interface GmMessageSummary {
+  id: string;
   from: string;
   subject: string;
-  date: string;
+  excerpt: string;
+  timestamp: string;
 }
 
-export interface TempMessageFull extends TempMessageSummary {
-  textBody: string;
-  htmlBody: string;
+export interface GmMessageFull extends GmMessageSummary {
+  body: string;
 }
 
-export async function generateAddress(): Promise<TempAddress> {
-  const res = await fetch(`${ONESEC_BASE}/?action=genRandomMailbox&count=1`);
-  if (!res.ok) throw new Error("Gagal membuat alamat email sementara");
-  const data = await res.json();
-  const full = data?.[0];
-  if (!full || !full.includes("@")) {
-    throw new Error("Format alamat tidak valid dari provider");
+async function gmFetch(params: Record<string, string>) {
+  const url = `${GM_BASE}?${new URLSearchParams(params).toString()}`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": UA },
+  });
+  if (!res.ok) {
+    throw new Error(`Guerrilla Mail HTTP ${res.status}`);
   }
-  const [login, domain] = full.split("@");
-  return { login, domain, address: full };
+  return res.json();
 }
 
-export async function fetchInbox(
-  login: string,
-  domain: string
-): Promise<TempMessageSummary[]> {
-  const url = `${ONESEC_BASE}/?action=getMessages&login=${encodeURIComponent(
-    login
-  )}&domain=${encodeURIComponent(domain)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Gagal mengambil inbox");
-  const data = await res.json();
-  return Array.isArray(data) ? data : [];
+export async function generateAddress(): Promise<GmAddress> {
+  const data = await gmFetch({ f: "get_email_address", lang: "en" });
+  if (!data?.email_addr || !data?.sid_token) {
+    throw new Error("Respons tidak lengkap dari Guerrilla Mail");
+  }
+  return { address: data.email_addr, sidToken: data.sid_token };
+}
+
+export async function fetchInbox(sidToken: string): Promise<GmMessageSummary[]> {
+  const data = await gmFetch({ f: "check_email", seq: "0", sid_token: sidToken });
+  const list = data?.list || [];
+  return list.map((m: any) => ({
+    id: String(m.mail_id),
+    from: m.mail_from,
+    subject: m.mail_subject,
+    excerpt: m.mail_excerpt,
+    timestamp: m.mail_timestamp,
+  }));
 }
 
 export async function fetchMessage(
-  login: string,
-  domain: string,
+  sidToken: string,
   id: string
-): Promise<TempMessageFull> {
-  const url = `${ONESEC_BASE}/?action=readMessage&login=${encodeURIComponent(
-    login
-  )}&domain=${encodeURIComponent(domain)}&id=${encodeURIComponent(id)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Gagal mengambil isi pesan");
-  return res.json();
+): Promise<GmMessageFull> {
+  const data = await gmFetch({ f: "fetch_email", email_id: id, sid_token: sidToken });
+  return {
+    id: String(data.mail_id),
+    from: data.mail_from,
+    subject: data.mail_subject,
+    excerpt: data.mail_excerpt,
+    timestamp: data.mail_timestamp,
+    body: data.mail_body || "",
+  };
 }

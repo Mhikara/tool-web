@@ -16,24 +16,23 @@ export async function GET(
     return NextResponse.json({ error: "ID pesan tidak valid." }, { status: 400 });
   }
 
-  const login = req.cookies.get("vynmail_login")?.value;
-  const domain = req.cookies.get("vynmail_domain")?.value;
-  if (!login || !domain) {
+  const sidToken = req.cookies.get("vynmail_sid")?.value;
+  if (!sidToken) {
     return NextResponse.json({ error: "Belum ada email aktif." }, { status: 401 });
   }
 
   try {
-    const message = await fetchMessage(login, domain, parsed.data.id);
-    const cleanHtml = DOMPurify.sanitize(message.htmlBody || "", {
+    const message = await fetchMessage(sidToken, parsed.data.id);
+    const cleanHtml = DOMPurify.sanitize(message.body || "", {
       USE_PROFILES: { html: true },
     });
 
     return NextResponse.json({
-      id: String(message.id),
+      id: message.id,
       from: { address: message.from, name: message.from },
       subject: message.subject,
-      createdAt: message.date,
-      text: message.textBody,
+      createdAt: new Date(Number(message.timestamp) * 1000).toISOString(),
+      text: message.excerpt,
       html: cleanHtml,
     });
   } catch (err) {
