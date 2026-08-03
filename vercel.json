@@ -1,0 +1,14 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "next build --webpack",
+  "installCommand": "npm install --prefer-offline --no-audit --no-fund",
+  "regions": ["sin1"],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ]
+}
