@@ -33,7 +33,6 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
     fontWeight: 600, fontSize: 13,
   } as const);
 
-  // YouTube
   const handleYoutubeInfo = async () => {
     if (!input.trim()) { setStatus("Tempel URL YouTube dulu."); return; }
     setLoading(true); setStatus("Mengambil info..."); setYtInfo(null);
@@ -43,7 +42,7 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
         body: JSON.stringify({ url: input, action: "info" }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || "Gagal");
       setYtInfo(data); setStatus("");
     } catch (e: any) { setStatus(e.message || "Gagal mengambil info."); }
     finally { setLoading(false); }
@@ -56,18 +55,17 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: input, action: "download", format, itag }),
       });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "Gagal"); }
       const blob = await res.blob();
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `youtube.${format}`;
-      link.click();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "youtube." + format;
+      a.click();
       setStatus("Selesai diunduh.");
     } catch (e: any) { setStatus(e.message || "Gagal mengunduh."); }
     finally { setLoading(false); }
   };
 
-  // TikTok
   const handleTiktok = async () => {
     if (!input.trim()) { setStatus("Tempel link TikTok dulu."); return; }
     setLoading(true); setStatus("Mengambil data..."); setResult(null);
@@ -77,7 +75,7 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
         body: JSON.stringify({ url: input }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || "Gagal");
       setResult(data); setStatus("");
     } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
     finally { setLoading(false); }
@@ -91,14 +89,13 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
         body: JSON.stringify({ keyword: input }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || "Gagal");
       setTiktokResults(data.results || []);
-      setStatus(data.results?.length ? "" : "Tidak ada hasil.");
+      setStatus((data.results && data.results.length) ? "" : "Tidak ada hasil.");
     } catch (e: any) { setStatus(e.message || "Gagal mencari."); }
     finally { setLoading(false); }
   };
 
-  // Instagram
   const handleInstagram = async () => {
     setLoading(true); setStatus("Memproses..."); setResult(null);
     try {
@@ -107,13 +104,12 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
         body: JSON.stringify({ url: input }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || "Gagal");
       setResult(data); setStatus("");
     } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
     finally { setLoading(false); }
   };
 
-  // Spotify
   const handleSpotifySearch = async () => {
     setLoading(true); setStatus("Mencari..."); setTracks([]); setSpotifyUnavailable(false);
     try {
@@ -123,14 +119,13 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
       });
       const data = await res.json();
       if (data.unavailable) { setSpotifyUnavailable(true); setStatus(""); return; }
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error || "Gagal");
       setTracks(data.tracks || []);
-      setStatus(data.tracks?.length ? "" : "Tidak ada hasil.");
+      setStatus((data.tracks && data.tracks.length) ? "" : "Tidak ada hasil.");
     } catch (e: any) { setStatus(e.message || "Gagal mencari."); }
     finally { setLoading(false); }
   };
 
-  // Terabox
   const handleTerabox = async () => {
     setLoading(true); setStatus("Memproses...");
     try {
@@ -138,15 +133,35 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: input }),
       });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error); }
-      const blob = await res.blob();
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "terabox-file";
-      link.click();
-      setStatus("Selesai diunduh.");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Gagal");
+      }
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        const data = await res.json();
+        if (data.downloadUrl) {
+          window.open(data.downloadUrl, "_blank");
+          setStatus("Link download dibuka.");
+        } else {
+          setStatus(data.error || "Selesai.");
+        }
+      } else {
+        const blob = await res.blob();
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "terabox-file";
+        a.click();
+        setStatus("Selesai diunduh.");
+      }
     } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
     finally { setLoading(false); }
+  };
+
+  const fmtDuration = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = String(sec % 60).padStart(2, "0");
+    return m + ":" + s;
   };
 
   return (
@@ -157,8 +172,8 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
 
         {slug === "tiktok" && (
           <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-            <button onClick={() => { setTiktokMode("link"); setInput(""); setTiktokResults([]); setResult(null); setStatus(""); }} style={tabBtn(tiktokMode === "link")}>Paste Link</button>
-            <button onClick={() => { setTiktokMode("search"); setInput(""); setResult(null); setStatus(""); }} style={tabBtn(tiktokMode === "search")}>Cari Judul</button>
+            <button type="button" onClick={() => { setTiktokMode("link"); setInput(""); setTiktokResults([]); setResult(null); setStatus(""); }} style={tabBtn(tiktokMode === "link")}>Paste Link</button>
+            <button type="button" onClick={() => { setTiktokMode("search"); setInput(""); setResult(null); setStatus(""); }} style={tabBtn(tiktokMode === "search")}>Cari Judul</button>
           </div>
         )}
 
@@ -175,11 +190,10 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
           style={inputStyle}
         />
 
-        {/* YouTube */}
         {slug === "youtube" && (
           <>
-            <button disabled={loading} onClick={handleYoutubeInfo} style={{ ...btnStyle, background: "linear-gradient(90deg,#ef4444,#f43f5e)", marginBottom: 12 }}>
-              {loading ? "Memproses..." : "▶ Ambil Info"}
+            <button type="button" disabled={loading} onClick={handleYoutubeInfo} style={{ ...btnStyle, background: "linear-gradient(90deg,#ef4444,#f43f5e)", marginBottom: 12 }}>
+              {loading ? "Memproses..." : "Ambil Info"}
             </button>
             {ytInfo && (
               <div style={{ marginTop: 8, background: "#1C1226", borderRadius: 14, padding: 16, border: "1px solid rgba(255,255,255,0.08)" }}>
@@ -188,19 +202,18 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.35, marginBottom: 4 }}>{ytInfo.title}</div>
                     <div style={{ fontSize: 11, color: "#9C90AC" }}>
-                      {ytInfo.channel}
-                      {ytInfo.duration ? ` · \( {Math.floor(ytInfo.duration / 60)}: \){String(ytInfo.duration % 60).padStart(2, "0")}` : ""}
+                      {ytInfo.channel}{ytInfo.duration ? " · " + fmtDuration(ytInfo.duration) : ""}
                     </div>
                   </div>
                 </div>
-                {ytInfo.videoFormats?.length > 0 && (
+                {ytInfo.videoFormats && ytInfo.videoFormats.length > 0 && (
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "#A78BFA", marginBottom: 8 }}>VIDEO MP4</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {ytInfo.videoFormats.map((f: any) => (
-                        <button key={f.itag} disabled={loading} onClick={() => handleYoutubeDownload("mp4", f.itag)}
+                        <button key={f.itag} type="button" disabled={loading} onClick={() => handleYoutubeDownload("mp4", f.itag)}
                           style={{ ...btnStyle, background: "#374151", padding: "10px 14px", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
-                          <span>{f.quality}{f.hasAudio ? "" : " (tanpa audio)"}{f.fps ? ` · ${f.fps}fps` : ""}</span>
+                          <span>{f.quality}{f.hasAudio ? "" : " (tanpa audio)"}{f.fps ? " · " + f.fps + "fps" : ""}</span>
                           <span style={{ fontSize: 11, opacity: 0.7 }}>{f.size || "Download"}</span>
                         </button>
                       ))}
@@ -209,7 +222,7 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
                 )}
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#F472B6", marginBottom: 8 }}>AUDIO MP3</div>
-                  <button disabled={loading} onClick={() => handleYoutubeDownload("mp3")} style={{ ...btnStyle, background: "#EC4899", padding: "10px 14px", fontSize: 13 }}>
+                  <button type="button" disabled={loading} onClick={() => handleYoutubeDownload("mp3")} style={{ ...btnStyle, background: "#EC4899", padding: "10px 14px", fontSize: 13 }}>
                     Download Audio (MP3)
                   </button>
                 </div>
@@ -219,24 +232,23 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
         )}
 
         {slug === "tiktok" && tiktokMode === "link" && (
-          <button disabled={loading} onClick={handleTiktok} style={btnStyle}>{loading ? "Memproses..." : "Ambil Video"}</button>
+          <button type="button" disabled={loading} onClick={handleTiktok} style={btnStyle}>{loading ? "Memproses..." : "Ambil Video"}</button>
         )}
         {slug === "tiktok" && tiktokMode === "search" && (
-          <button disabled={loading} onClick={handleTiktokSearch} style={btnStyle}>{loading ? "Mencari..." : "Cari Video"}</button>
+          <button type="button" disabled={loading} onClick={handleTiktokSearch} style={btnStyle}>{loading ? "Mencari..." : "Cari Video"}</button>
         )}
-        {slug === "instagram" && <button disabled={loading} onClick={handleInstagram} style={btnStyle}>Ambil Media</button>}
-        {slug === "spotify" && <button disabled={loading} onClick={handleSpotifySearch} style={btnStyle}>Cari Lagu</button>}
-        {slug === "terabox" && <button disabled={loading} onClick={handleTerabox} style={btnStyle}>Download</button>}
+        {slug === "instagram" && <button type="button" disabled={loading} onClick={handleInstagram} style={btnStyle}>Ambil Media</button>}
+        {slug === "spotify" && <button type="button" disabled={loading} onClick={handleSpotifySearch} style={btnStyle}>Cari Lagu</button>}
+        {slug === "terabox" && <button type="button" disabled={loading} onClick={handleTerabox} style={btnStyle}>Download</button>}
 
         {status && <p style={{ marginTop: 12, fontSize: 13, color: "#9C90AC" }}>{status}</p>}
 
         {spotifyUnavailable && (
           <div style={{ marginTop: 16, padding: 16, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: 12, fontSize: 13, color: "#C4B5FD" }}>
-            Fitur Spotify sedang belum aktif.
+            Fitur Spotify belum aktif. Tambah SPOTIFY_CLIENT_ID & SECRET di Vercel Env.
           </div>
         )}
 
-        {/* Hasil TikTok */}
         {result && slug === "tiktok" && (
           <div style={{ marginTop: 20, background: "#1C1226", borderRadius: 14, padding: 16, border: "1px solid rgba(255,255,255,0.08)" }}>
             <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
@@ -245,31 +257,24 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
                 <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.35, marginBottom: 6 }}>{result.title}</div>
                 <div style={{ fontSize: 12, color: "#C4B5FD", marginBottom: 4 }}>@{result.author?.username || result.author?.name || "-"}</div>
                 {result.duration != null && <div style={{ fontSize: 11, color: "#9C90AC" }}>Durasi: {result.duration}s</div>}
-                {result.stats && (
-                  <div style={{ fontSize: 11, color: "#9C90AC", marginTop: 4 }}>
-                    ▶️ {(result.stats.plays || 0).toLocaleString()} · ❤️ {(result.stats.likes || 0).toLocaleString()}
-                  </div>
-                )}
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {result.downloadVideo && (
-                <a href={result.downloadVideo} download style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>
-                  Download Video (No WM)
-                </a>
+              {(result.downloadVideo || result.videoUrl) && (
+                <a href={result.downloadVideo || ("/api/downloader/tiktok/file?url=" + encodeURIComponent(result.videoUrl) + "&filename=tiktok-video.mp4")}
+                  style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>Download Video (No WM)</a>
               )}
-              {result.downloadAudio && (
-                <a href={result.downloadAudio} download style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "#EC4899" }}>
-                  Download Audio (MP3)
-                </a>
+              {(result.downloadAudio || result.audioUrl) && (
+                <a href={result.downloadAudio || ("/api/downloader/tiktok/file?url=" + encodeURIComponent(result.audioUrl) + "&filename=tiktok-audio.mp3")}
+                  style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "#EC4899" }}>Download Audio (MP3)</a>
               )}
             </div>
-            {result.images?.length > 0 && (
+            {result.images && result.images.length > 0 && (
               <div style={{ marginTop: 14 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#A78BFA", marginBottom: 8 }}>FOTO ({result.images.length})</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {result.images.map((img: string, i: number) => (
-                    <a key={i} href={`/api/downloader/tiktok/file?url=\( {encodeURIComponent(img)}&filename=tiktok-foto- \){i + 1}.jpg`} download>
+                    <a key={i} href={"/api/downloader/tiktok/file?url=" + encodeURIComponent(img) + "&filename=tiktok-foto-" + (i + 1) + ".jpg"}>
                       <img src={img} alt="" style={{ width: "100%", borderRadius: 8, aspectRatio: "1", objectFit: "cover" }} />
                     </a>
                   ))}
@@ -279,22 +284,20 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
           </div>
         )}
 
-        {/* Hasil Instagram */}
         {result && slug === "instagram" && (
           <div style={{ marginTop: 20, background: "#1C1226", borderRadius: 12, padding: 16 }}>
             {(result.cover || result.imageUrl) && (
               <img src={result.cover || result.imageUrl} alt="" style={{ width: "100%", borderRadius: 8, marginBottom: 12 }} />
             )}
-            {result.videoUrl && (
-              <a href={result.videoUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", marginBottom: 8 }}>Download Video</a>
+            {(result.downloadVideo || result.videoUrl) && (
+              <a href={result.downloadVideo || result.videoUrl} style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", marginBottom: 8 }}>Download Video</a>
             )}
-            {result.imageUrl && !result.videoUrl && (
-              <a href={result.imageUrl} download target="_blank" rel="noreferrer" style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>Download Foto</a>
+            {(result.downloadImage || (result.imageUrl && !result.videoUrl)) && (
+              <a href={result.downloadImage || result.imageUrl} style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>Download Foto</a>
             )}
           </div>
         )}
 
-        {/* Hasil search TikTok */}
         {tiktokResults.length > 0 && (
           <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
             {tiktokResults.map((v, i) => (
@@ -308,11 +311,11 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                   {v.videoUrl && (
-                    <a href={`/api/downloader/tiktok/file?url=\( {encodeURIComponent(v.videoUrl)}&filename=tiktok- \){i + 1}.mp4`} download
+                    <a href={"/api/downloader/tiktok/file?url=" + encodeURIComponent(v.videoUrl) + "&filename=tiktok-" + (i + 1) + ".mp4"}
                       style={{ ...btnStyle, flex: 1, textAlign: "center", textDecoration: "none", padding: 8, fontSize: 12 }}>Video</a>
                   )}
                   {v.audioUrl && (
-                    <a href={`/api/downloader/tiktok/file?url=\( {encodeURIComponent(v.audioUrl)}&filename=tiktok-audio- \){i + 1}.mp3`} download
+                    <a href={"/api/downloader/tiktok/file?url=" + encodeURIComponent(v.audioUrl) + "&filename=tiktok-audio-" + (i + 1) + ".mp3"}
                       style={{ ...btnStyle, flex: 1, textAlign: "center", textDecoration: "none", padding: 8, fontSize: 12, background: "#EC4899" }}>Audio</a>
                   )}
                 </div>
@@ -321,7 +324,6 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
           </div>
         )}
 
-        {/* Spotify tracks */}
         {tracks.length > 0 && (
           <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
             {tracks.map((t, i) => (
