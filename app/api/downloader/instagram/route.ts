@@ -10,6 +10,22 @@ const HEADERS = {
   "Accept-Language": "en-US,en;q=0.9",
 };
 
+function cacheHeaders(maxAge = 300, swr = 900) {
+  return {
+    "Cache-Control": "public, s-maxage=" + maxAge + ", stale-while-revalidate=" + swr,
+    "CDN-Cache-Control": "public, s-maxage=" + maxAge + ", stale-while-revalidate=" + swr,
+    "Vercel-CDN-Cache-Control": "public, s-maxage=" + maxAge + ", stale-while-revalidate=" + swr,
+  };
+}
+
+function noStoreHeaders() {
+  return {
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "CDN-Cache-Control": "no-store",
+    "Vercel-CDN-Cache-Control": "no-store",
+  };
+}
+
 function getShortcode(url: string): string | null {
   const match = url.match(/instagram\.com\/(?:reel|p|tv|reels)\/([A-Za-z0-9_-]+)/);
   return match?.[1] || null;
@@ -18,8 +34,8 @@ function getShortcode(url: string): string | null {
 function extractMeta(html: string, props: string[]): string | null {
   for (const prop of props) {
     const patterns = [
-      new RegExp(`<meta[^>]*property=["']${prop}["'][^>]*content=["']([^"']+)["']`, "i"),
-      new RegExp(`<meta[^>]*content=["']([^"']+)["'][^>]*property=["']${prop}["']`, "i"),
+      new RegExp('<meta[^>]*property=["\']' + prop + '["\'][^>]*content=["\']([^"\']+)["\']', "i"),
+      new RegExp('<meta[^>]*content=["\']([^"\']+)["\'][^>]*property=["\']' + prop + '["\']', "i"),
     ];
     for (const re of patterns) {
       const m = html.match(re);
@@ -33,10 +49,16 @@ export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json();
     if (!url || typeof url !== "string") {
-      return NextResponse.json({ error: "Link Instagram wajib diisi" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Link Instagram wajib diisi" },
+        { status: 400, headers: noStoreHeaders() }
+      );
     }
     if (!url.includes("instagram.com")) {
-      return NextResponse.json({ error: "Link harus dari Instagram" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Link harus dari Instagram" },
+        { status: 400, headers: noStoreHeaders() }
+      );
     }
 
     const shortcode = getShortcode(url);
@@ -48,7 +70,7 @@ export async function POST(req: NextRequest) {
     if (shortcode) {
       try {
         const embedRes = await fetch(
-          `https://www.instagram.com/p/${shortcode}/embed/captioned/`,
+          "https://www.instagram.com/p/" + shortcode + "/embed/captioned/",
           { headers: HEADERS }
         );
         const html = await embedRes.text();
@@ -59,9 +81,7 @@ export async function POST(req: NextRequest) {
         if (!videoUrl) {
           const jsonVideo = html.match(/"video_url":"([^"]+)"/);
           if (jsonVideo?.[1]) {
-            videoUrl = jsonVideo[1]
-              .replace(/\\u0026/g, "&")
-              .replace(/\\\//g, "/");
+            videoUrl = jsonVideo[1].replace(/\\u0026/g, "&").replace(/\\\//g, "/");
           }
         }
 
@@ -88,9 +108,7 @@ export async function POST(req: NextRequest) {
         if (!videoUrl) {
           const jsonVideo = html.match(/"video_url":"([^"]+)"/);
           if (jsonVideo?.[1]) {
-            videoUrl = jsonVideo[1]
-              .replace(/\\u0026/g, "&")
-              .replace(/\\\//g, "/");
+            videoUrl = jsonVideo[1].replace(/\\u0026/g, "&").replace(/\\\//g, "/");
           }
         }
       } catch {
@@ -98,10 +116,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Method 3: ddinstagram mirror (gratis)
+    // Method 3: ddinstagram mirror
     if (!videoUrl && !imageUrl && shortcode) {
       try {
-        const dd = await fetch(`https://www.ddinstagram.com/p/${shortcode}/`, {
+        const dd = await fetch("https://www.ddinstagram.com/p/" + shortcode + "/", {
           headers: HEADERS,
           redirect: "follow",
         });
@@ -119,27 +137,38 @@ export async function POST(req: NextRequest) {
           error:
             "Media tidak ditemukan. Post mungkin private, carousel kompleks, atau butuh login.",
         },
-        { status: 404 }
+        { status: 404, headers: noStoreHeaders() }
       );
     }
 
-    return NextResponse.json({
-      title: title || "Instagram Media",
-      videoUrl: videoUrl || null,
-      imageUrl: imageUrl || null,
-      cover: imageUrl || null,
-      downloadVideo: videoUrl
-        ? `/api/downloader/tiktok/file?url=${encodeURIComponent(videoUrl)}&filename=instagram-video.mp4`
-        : null,
-      downloadImage: imageUrl
-        ? `/api/downloader/tiktok/file?url=${encodeURIComponent(imageUrl)}&filename=instagram-foto.jpg`
-        : null,
-    });
+    return NextResponse.json(
+      {
+        title: title || "Instagram Media",
+        videoUrl: videoUrl || null,
+        imageUrl: imageUrl || null,
+        cover: imageUrl || null,
+        downloadVideo: videoUrl
+          ? "/api/downloader/tiktok/file?url=" +
+            encodeURIComponent(videoUrl) +
+            "&filename=instagram-video.mp4"
+          : null,
+        downloadImage: imageUrl
+          ? "/api/downloader/tiktok/file?url=" +
+            encodeURIComponent(imageUrl) +
+            "&filename=instagram-foto.jpg"
+          : null,
+      },
+      {
+        status: 200,
+        // Cache 5 menit, SWR 15 menit
+        headers: cacheHeaders(300, 900),
+      }
+    );
   } catch (err: any) {
     console.error("[instagram]", err);
     return NextResponse.json(
       { error: err?.message || "Gagal memproses link Instagram" },
-      { status: 500 }
+      { status: 500, headers: noStoreHeaders() }
     );
   }
 }
