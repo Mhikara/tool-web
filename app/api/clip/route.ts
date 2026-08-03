@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import ffmpegPath from "ffmpeg-static";
 import ffmpeg from "fluent-ffmpeg";
-import archiver from "archiver";
-import type {} from "archiver";
+const archiver = require("archiver");
 import fs from "fs";
 import os from "os";
 import path from "path";
