@@ -1,100 +1,63 @@
 // lib/vynmail.ts
-// Client tipis untuk mail.tm temporary email API (https://docs.mail.tm)
+// Client tipis untuk 1secmail temporary email API (https://www.1secmail.com/api/)
+// Dipilih karena TIDAK perlu proses buat-akun (no account/token step),
+// sehingga jauh lebih tahan terhadap blokir IP data center dibanding
+// provider yang mewajibkan registrasi seperti mail.tm.
 
-const MAILTM_BASE = "https://api.mail.tm";
+const ONESEC_BASE = "https://www.1secmail.com/api/v1";
 
-export interface MailTmAccount {
+export interface TempAddress {
+  login: string;
+  domain: string;
   address: string;
-  password: string;
-  token: string;
 }
 
-export interface MailTmMessageSummary {
-  id: string;
-  from: { address: string; name: string };
+export interface TempMessageSummary {
+  id: number;
+  from: string;
   subject: string;
-  intro: string;
-  seen: boolean;
-  createdAt: string;
+  date: string;
 }
 
-export interface MailTmMessageFull extends MailTmMessageSummary {
-  text: string;
-  html: string[];
+export interface TempMessageFull extends TempMessageSummary {
+  textBody: string;
+  htmlBody: string;
 }
 
-function randomString(length: number): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let out = "";
-  for (let i = 0; i < length; i++) {
-    out += chars[Math.floor(Math.random() * chars.length)];
+export async function generateAddress(): Promise<TempAddress> {
+  const res = await fetch(`${ONESEC_BASE}/?action=genRandomMailbox&count=1`);
+  if (!res.ok) throw new Error("Gagal membuat alamat email sementara");
+  const data = await res.json();
+  const full = data?.[0];
+  if (!full || !full.includes("@")) {
+    throw new Error("Format alamat tidak valid dari provider");
   }
-  return out;
+  const [login, domain] = full.split("@");
+  return { login, domain, address: full };
 }
 
-export async function createMailTmAccount(): Promise<MailTmAccount> {
-  const domainsRes = await fetch(`${MAILTM_BASE}/domains?page=1`);
-  if (!domainsRes.ok) throw new Error("Gagal mengambil daftar domain mail.tm");
-  const domainsData = await domainsRes.json();
-  const domain = domainsData?.["hydra:member"]?.[0]?.domain;
-  if (!domain) throw new Error("Tidak ada domain mail.tm yang tersedia");
-
-  const address = `vyn${randomString(10)}@${domain}`;
-  const password = randomString(16);
-
-  const createRes = await fetch(`${MAILTM_BASE}/accounts`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address, password }),
-  });
-  if (!createRes.ok) {
-    const errBody = await createRes.text();
-    throw new Error(`Gagal membuat akun mail.tm: ${errBody}`);
-  }
-
-  const tokenRes = await fetch(`${MAILTM_BASE}/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address, password }),
-  });
-  if (!tokenRes.ok) throw new Error("Gagal mendapatkan token mail.tm");
-  const tokenData = await tokenRes.json();
-
-  return { address, password, token: tokenData.token };
-}
-
-export async function fetchInbox(token: string): Promise<MailTmMessageSummary[]> {
-  const res = await fetch(`${MAILTM_BASE}/messages?page=1`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (res.status === 401) throw new Error("UNAUTHORIZED");
+export async function fetchInbox(
+  login: string,
+  domain: string
+): Promise<TempMessageSummary[]> {
+  const url = `${ONESEC_BASE}/?action=getMessages&login=${encodeURIComponent(
+    login
+  )}&domain=${encodeURIComponent(domain)}`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error("Gagal mengambil inbox");
   const data = await res.json();
-  return (data["hydra:member"] || []).map((m: any) => ({
-    id: m.id,
-    from: m.from,
-    subject: m.subject,
-    intro: m.intro,
-    seen: m.seen,
-    createdAt: m.createdAt,
-  }));
+  return Array.isArray(data) ? data : [];
 }
 
-export async function fetchMessage(token: string, id: string): Promise<MailTmMessageFull> {
-  const res = await fetch(`${MAILTM_BASE}/messages/${encodeURIComponent(id)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (res.status === 401) throw new Error("UNAUTHORIZED");
+export async function fetchMessage(
+  login: string,
+  domain: string,
+  id: string
+): Promise<TempMessageFull> {
+  const url = `${ONESEC_BASE}/?action=readMessage&login=${encodeURIComponent(
+    login
+  )}&domain=${encodeURIComponent(domain)}&id=${encodeURIComponent(id)}`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error("Gagal mengambil isi pesan");
-  const data = await res.json();
-  return {
-    id: data.id,
-    from: data.from,
-    subject: data.subject,
-    intro: data.intro,
-    seen: data.seen,
-    createdAt: data.createdAt,
-    text: data.text,
-    html: data.html || [],
-  };
+  return res.json();
 }

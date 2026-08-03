@@ -4,7 +4,7 @@ import { z } from "zod";
 import DOMPurify from "isomorphic-dompurify";
 import { fetchMessage } from "@/lib/vynmail";
 
-const paramsSchema = z.object({ id: z.string().min(1).max(100) });
+const paramsSchema = z.object({ id: z.string().min(1).max(20) });
 
 export async function GET(
   req: NextRequest,
@@ -16,30 +16,27 @@ export async function GET(
     return NextResponse.json({ error: "ID pesan tidak valid." }, { status: 400 });
   }
 
-  const token = req.cookies.get("vynmail_token")?.value;
-  if (!token) {
+  const login = req.cookies.get("vynmail_login")?.value;
+  const domain = req.cookies.get("vynmail_domain")?.value;
+  if (!login || !domain) {
     return NextResponse.json({ error: "Belum ada email aktif." }, { status: 401 });
   }
 
   try {
-    const message = await fetchMessage(token, parsed.data.id);
-
-    const cleanHtml = (message.html || [])
-      .map((chunk) => DOMPurify.sanitize(chunk, { USE_PROFILES: { html: true } }))
-      .join("\n");
+    const message = await fetchMessage(login, domain, parsed.data.id);
+    const cleanHtml = DOMPurify.sanitize(message.htmlBody || "", {
+      USE_PROFILES: { html: true },
+    });
 
     return NextResponse.json({
-      id: message.id,
-      from: message.from,
+      id: String(message.id),
+      from: { address: message.from, name: message.from },
       subject: message.subject,
-      createdAt: message.createdAt,
-      text: message.text,
+      createdAt: message.date,
+      text: message.textBody,
       html: cleanHtml,
     });
-  } catch (err: any) {
-    if (err.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Sesi email sudah kadaluarsa." }, { status: 401 });
-    }
+  } catch (err) {
     console.error("[vyn-mail/message]", err);
     return NextResponse.json({ error: "Gagal memuat pesan." }, { status: 502 });
   }

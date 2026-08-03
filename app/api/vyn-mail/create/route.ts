@@ -1,9 +1,7 @@
 // app/api/vyn-mail/create/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { createMailTmAccount } from "@/lib/vynmail";
+import { generateAddress } from "@/lib/vynmail";
 
-// Rate limit sederhana: maks 5 email baru per IP / 10 menit.
-// Ganti dengan lib rate limiter yang sudah ada kalau mau konsisten.
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const hits = new Map<string, number[]>();
@@ -27,23 +25,20 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const account = await createMailTmAccount();
-    const res = NextResponse.json({ address: account.address });
+    const { login, domain, address } = await generateAddress();
+    const res = NextResponse.json({ address });
 
-    res.cookies.set("vynmail_token", account.token, {
+    const cookieOpts = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "lax" as const,
       path: "/",
       maxAge: 60 * 60 * 24,
-    });
-    res.cookies.set("vynmail_address", account.address, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24,
-    });
+    };
+
+    res.cookies.set("vynmail_login", login, cookieOpts);
+    res.cookies.set("vynmail_domain", domain, cookieOpts);
+    res.cookies.set("vynmail_address", address, { ...cookieOpts, httpOnly: false });
 
     return res;
   } catch (err) {
