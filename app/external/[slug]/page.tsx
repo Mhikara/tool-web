@@ -24,6 +24,7 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
     fontWeight: 600, fontSize: 13,
   } as const);
 
+  // Get HTML
   const [htmlUrl, setHtmlUrl] = useState("");
   const [htmlSource, setHtmlSource] = useState("");
   const [htmlStatus, setHtmlStatus] = useState("");
@@ -59,12 +60,13 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
     link.click();
   };
 
+  // Encrypt
   const [rawHtml, setRawHtml] = useState("");
   const [encryptedHtml, setEncryptedHtml] = useState("");
 
   const handleEncrypt = () => {
-    const encoded = Buffer.from(rawHtml, "utf-8").toString("base64");
-    const wrapper = `<script>document.write(atob("${encoded}"))</script>`;
+    const encoded = btoa(unescape(encodeURIComponent(rawHtml)));
+    const wrapper = '<script>document.write(decodeURIComponent(escape(atob("' + encoded + '"))))</script>';
     setEncryptedHtml(wrapper);
   };
 
@@ -72,6 +74,7 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
     navigator.clipboard.writeText(encryptedHtml);
   };
 
+  // Upload
   const [uploadStatus, setUploadStatus] = useState("");
   const [uploadedUrl, setUploadedUrl] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -95,6 +98,7 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
     }
   };
 
+  // AI
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiResult, setAiResult] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -113,6 +117,41 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
       setAiResult("Terjadi kesalahan.");
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  // Deploy & Update Web
+  const [hookUrl, setHookUrl] = useState("");
+  const [deployNote, setDeployNote] = useState("");
+  const [deployLoading, setDeployLoading] = useState(false);
+  const [deployStatus, setDeployStatus] = useState("");
+  const [deployOk, setDeployOk] = useState(false);
+  const [provider, setProvider] = useState<"vercel" | "netlify">("vercel");
+
+  const handleDeploy = async () => {
+    if (!hookUrl.trim()) {
+      setDeployStatus("Tempel Deploy Hook URL dulu.");
+      setDeployOk(false);
+      return;
+    }
+    setDeployLoading(true);
+    setDeployStatus("Men-trigger deploy...");
+    setDeployOk(false);
+    try {
+      const res = await fetch("/api/external/deploy-hook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hookUrl: hookUrl.trim(), note: deployNote }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal trigger");
+      setDeployOk(true);
+      setDeployStatus(data.message || "Deploy berhasil di-trigger.");
+    } catch (e: any) {
+      setDeployOk(false);
+      setDeployStatus(e.message || "Gagal trigger deploy.");
+    } finally {
+      setDeployLoading(false);
     }
   };
 
@@ -136,60 +175,135 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
         {slug === "get-code-html" && (
           <div>
             <input type="text" placeholder="https://contoh.com" value={htmlUrl} onChange={(e) => setHtmlUrl(e.target.value)} style={inputStyle} />
-            <button disabled={htmlLoading} onClick={handleGetHtml} style={btnStyle}>
+            <button type="button" disabled={htmlLoading} onClick={handleGetHtml} style={btnStyle}>
               {htmlLoading ? "Mengambil..." : "Ambil Source Code"}
             </button>
             {htmlStatus && <p style={{ marginTop: 12, fontSize: 13, color: "#9C90AC" }}>{htmlStatus}</p>}
-
             {htmlSource && (
               <>
                 <div style={{ display: "flex", gap: 8, marginTop: 16, marginBottom: 12 }}>
-                  <button onClick={() => setHtmlView("preview")} style={tabBtn(htmlView === "preview")}>👁️ Preview</button>
-                  <button onClick={() => setHtmlView("source")} style={tabBtn(htmlView === "source")}>{"</>"} Source</button>
+                  <button type="button" onClick={() => setHtmlView("preview")} style={tabBtn(htmlView === "preview")}>Preview</button>
+                  <button type="button" onClick={() => setHtmlView("source")} style={tabBtn(htmlView === "source")}>Source</button>
                 </div>
-
                 {htmlView === "preview" && (
                   <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)", marginBottom: 12 }}>
-                    <iframe
-                      srcDoc={htmlSource}
-                      sandbox=""
-                      style={{ width: "100%", height: 420, border: "none", background: "#fff" }}
-                      title="Preview halaman"
-                    />
+                    <iframe srcDoc={htmlSource} sandbox="" style={{ width: "100%", height: 420, border: "none", background: "#fff" }} title="Preview" />
                   </div>
                 )}
-
                 {htmlView === "source" && (
-                  <textarea
-                    readOnly
-                    value={htmlSource}
-                    rows={14}
-                    style={{ ...inputStyle, fontFamily: "monospace", fontSize: 11, marginBottom: 12 }}
-                  />
+                  <textarea readOnly value={htmlSource} rows={14} style={{ ...inputStyle, fontFamily: "monospace", fontSize: 11, marginBottom: 12 }} />
                 )}
-
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={handleCopyHtml} style={{ ...btnStyle, background: "#374151" }}>Copy</button>
-                  <button onClick={handleDownloadHtml} style={btnStyle}>Download .html</button>
+                  <button type="button" onClick={handleCopyHtml} style={{ ...btnStyle, background: "#374151" }}>Copy</button>
+                  <button type="button" onClick={handleDownloadHtml} style={btnStyle}>Download .html</button>
                 </div>
-                <p style={{ fontSize: 11, color: "#6B6178", marginTop: 8 }}>
-                  Preview berjalan dalam sandbox terisolasi (tanpa JavaScript/cookie) — hanya untuk cek tampilan visual.
-                </p>
               </>
             )}
           </div>
         )}
 
         {slug === "deploy-update-web" && (
-          <div style={{ padding: 16, background: "#1C1226", borderRadius: 12, fontSize: 13, color: "#9C90AC", lineHeight: 1.7 }}>
-            Deploy otomatis dari sini butuh <b>Vercel Deploy Hook</b>. Buat dulu di Vercel → Settings → Git → Deploy Hooks.
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              <button type="button" onClick={() => setProvider("vercel")} style={tabBtn(provider === "vercel")}>Vercel</button>
+              <button type="button" onClick={() => setProvider("netlify")} style={tabBtn(provider === "netlify")}>Netlify</button>
+            </div>
+
+            <div style={{
+              padding: 14, background: "#1C1226", borderRadius: 12, fontSize: 12,
+              color: "#9C90AC", lineHeight: 1.7, marginBottom: 16,
+            }}>
+              {provider === "vercel" ? (
+                <>
+                  <b style={{ color: "#C4B5FD" }}>Cara dapat Deploy Hook Vercel (gratis):</b>
+                  <ol style={{ paddingLeft: 18, margin: "8px 0 0" }}>
+                    <li>Buka project di Vercel</li>
+                    <li>Settings → Git → <b>Deploy Hooks</b></li>
+                    <li>Name: mis. <code>tool-web</code>, Branch: <code>main</code></li>
+                    <li>Create → copy URL hook</li>
+                    <li>Tempel URL di bawah, lalu tekan Deploy</li>
+                  </ol>
+                </>
+              ) : (
+                <>
+                  <b style={{ color: "#C4B5FD" }}>Cara dapat Build Hook Netlify (gratis):</b>
+                  <ol style={{ paddingLeft: 18, margin: "8px 0 0" }}>
+                    <li>Site settings → Build & deploy → Build hooks</li>
+                    <li>Add build hook → copy URL</li>
+                    <li>Tempel di bawah, lalu tekan Deploy</li>
+                  </ol>
+                </>
+              )}
+            </div>
+
+            <label style={{ fontSize: 12, color: "#9C90AC" }}>Deploy Hook URL</label>
+            <input
+              type="url"
+              placeholder={
+                provider === "vercel"
+                  ? "https://api.vercel.com/v1/integrations/deploy/..."
+                  : "https://api.netlify.com/build_hooks/..."
+              }
+              value={hookUrl}
+              onChange={(e) => setHookUrl(e.target.value)}
+              style={{ ...inputStyle, marginTop: 6 }}
+            />
+
+            <label style={{ fontSize: 12, color: "#9C90AC" }}>Catatan (opsional)</label>
+            <input
+              type="text"
+              placeholder="Update fitur X..."
+              value={deployNote}
+              onChange={(e) => setDeployNote(e.target.value)}
+              style={{ ...inputStyle, marginTop: 6 }}
+            />
+
+            <button type="button" disabled={deployLoading} onClick={handleDeploy} style={btnStyle}>
+              {deployLoading ? "Men-trigger..." : "🚀 Trigger Deploy"}
+            </button>
+
+            {deployStatus && (
+              <div style={{
+                marginTop: 14, padding: 14, borderRadius: 12, fontSize: 13, lineHeight: 1.5,
+                background: deployOk ? "rgba(52,211,153,0.12)" : "rgba(248,113,113,0.12)",
+                border: "1px solid " + (deployOk ? "rgba(52,211,153,0.35)" : "rgba(248,113,113,0.35)"),
+                color: deployOk ? "#6EE7B7" : "#FCA5A5",
+              }}>
+                {deployStatus}
+              </div>
+            )}
+
+            <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+              <a
+                href="https://vercel.com/dashboard"
+                target="_blank"
+                rel="noreferrer"
+                style={{ ...btnStyle, background: "#374151", textAlign: "center", textDecoration: "none", display: "block" }}
+              >
+                Buka Vercel Dashboard
+              </a>
+              <a
+                href="https://app.netlify.com"
+                target="_blank"
+                rel="noreferrer"
+                style={{ ...btnStyle, background: "#374151", textAlign: "center", textDecoration: "none", display: "block" }}
+              >
+                Buka Netlify Dashboard
+              </a>
+              <a
+                href="https://tool-web-drab.vercel.app"
+                style={{ ...btnStyle, background: "transparent", border: "1px solid rgba(255,255,255,0.15)", textAlign: "center", textDecoration: "none", display: "block", color: "#C4B5FD" }}
+              >
+                Lihat situs tool-web
+              </a>
+            </div>
           </div>
         )}
 
         {slug === "nexus-ai" && (
           <div>
             <textarea placeholder="Tanya apa saja..." value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={4} style={inputStyle} />
-            <button disabled={aiLoading} onClick={handleAiChat} style={btnStyle}>{aiLoading ? "Memproses..." : "Kirim"}</button>
+            <button type="button" disabled={aiLoading} onClick={handleAiChat} style={btnStyle}>{aiLoading ? "Memproses..." : "Kirim"}</button>
             {aiResult && (
               <div style={{ marginTop: 16, padding: 14, background: "#1C1226", borderRadius: 10, fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
                 {aiResult}
@@ -214,11 +328,11 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
         {slug === "web-encryption" && (
           <div>
             <textarea placeholder="Paste kode HTML di sini..." value={rawHtml} onChange={(e) => setRawHtml(e.target.value)} rows={8} style={{ ...inputStyle, fontFamily: "monospace", fontSize: 12 }} />
-            <button onClick={handleEncrypt} style={btnStyle}>Encrypt</button>
+            <button type="button" onClick={handleEncrypt} style={btnStyle}>Encrypt</button>
             {encryptedHtml && (
               <>
                 <textarea readOnly value={encryptedHtml} rows={6} style={{ ...inputStyle, marginTop: 16, fontFamily: "monospace", fontSize: 11 }} />
-                <button onClick={handleCopyEncrypted} style={{ ...btnStyle, background: "#374151" }}>Copy Hasil</button>
+                <button type="button" onClick={handleCopyEncrypted} style={{ ...btnStyle, background: "#374151" }}>Copy Hasil</button>
               </>
             )}
           </div>
@@ -226,12 +340,12 @@ export default function ExternalDetail({ params }: { params: Promise<{ slug: str
 
         {slug === "unban-whatsapp" && (
           <div style={{ fontSize: 13, color: "#9C90AC", lineHeight: 1.8 }}>
-            <p style={{ marginBottom: 12 }}>Kalau nomor WhatsApp kamu ter-banned, langkah resminya:</p>
+            <p style={{ marginBottom: 12 }}>Kalau nomor WhatsApp ter-banned, langkah resminya:</p>
             <ol style={{ paddingLeft: 20, marginBottom: 12 }}>
-              <li>Buka aplikasi WhatsApp, akan muncul layar "Nomor Anda diblokir"</li>
-              <li>Ketuk tombol untuk mengirim banding lewat email ke tim WhatsApp</li>
-              <li>Jelaskan situasinya dengan sopan</li>
-              <li>Tunggu balasan, biasanya dalam beberapa hari</li>
+              <li>Buka WhatsApp → layar nomor diblokir</li>
+              <li>Kirim banding lewat email ke WhatsApp</li>
+              <li>Jelaskan dengan sopan</li>
+              <li>Tunggu balasan beberapa hari</li>
             </ol>
           </div>
         )}
