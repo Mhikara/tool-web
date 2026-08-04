@@ -64,9 +64,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Import ESM archiver secara dinamis (fix webpack error)
-    const archiverMod = await import("archiver");
-    const archiver = archiverMod.default || archiverMod;
+    const archiverMod: any = await import("archiver");
+    const archiver = (archiverMod.default || archiverMod) as (
+      format: string,
+      options?: { zlib?: { level: number } }
+    ) => any;
 
     const clipCount = Math.ceil(totalDuration / clipDuration);
     const maxClips = 15;
