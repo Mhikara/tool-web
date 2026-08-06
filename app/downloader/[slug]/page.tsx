@@ -2,6 +2,7 @@
 import { useState, use } from "react";
 import { getDownloaderBySlug } from "@/lib/downloaderTools";
 import { notFound } from "next/navigation";
+import { addDownload } from "@/lib/localDownloadDb";
 
 export default function DownloaderDetail({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -77,6 +78,15 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gagal");
       setResult(data); setStatus("");
+      try {
+        addDownload({
+          platform: "tiktok",
+          title: data.title || "TikTok",
+          url: input,
+          mediaType: data.images?.length ? "image" : "video",
+          quality: data.videoHd ? "HD" : "normal",
+        });
+      } catch {}
     } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
     finally { setLoading(false); }
   };

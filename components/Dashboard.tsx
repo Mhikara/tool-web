@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { listDownloads, clearDownloads, type DownloadRecord } from "@/lib/localDownloadDb";
 import Link from "next/link";
 import { downloaderTools } from "@/lib/downloaderTools";
 import { makerTools } from "@/lib/makerTools";
@@ -67,6 +68,12 @@ function ToolCard({
 
 export default function Dashboard() {
   const [tab, setTab] = useState<TabKey>("all");
+  const [history, setHistory] = useState<DownloadRecord[]>([]);
+
+  useEffect(() => {
+    setHistory(listDownloads());
+  }, [tab]);
+
 
   const showDownloader = tab === "all" || tab === "downloader";
   const showMaker = tab === "all" || tab === "maker";
@@ -252,11 +259,35 @@ export default function Dashboard() {
           <section style={{ background: "#1C1226", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <span style={{ fontWeight: 700, fontSize: 14 }}>↺ History Download</span>
-              <span style={{ fontSize: 12, color: "#6B6178" }}>0</span>
+              <span style={{ fontSize: 12, color: "#6B6178" }}>{history.length}</span>
             </div>
-            <div style={{ background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 12, padding: 16, fontSize: 12.5, color: "#9C90AC", textAlign: "center" }}>
-              Belum ada riwayat. Download akan muncul di sini.
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+              {history.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { clearDownloads(); setHistory([]); }}
+                  style={{ fontSize: 11, background: "transparent", border: "1px solid rgba(255,255,255,0.15)", color: "#9C90AC", borderRadius: 8, padding: "4px 10px" }}
+                >
+                  Hapus semua
+                </button>
+              )}
             </div>
+            {history.length === 0 ? (
+              <div style={{ background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 12, padding: 16, fontSize: 12.5, color: "#9C90AC", textAlign: "center" }}>
+                Belum ada riwayat. Download tersimpan di perangkat ini (tanpa database server).
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {history.slice(0, 20).map((h) => (
+                  <div key={h.id} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 10, fontSize: 12 }}>
+                    <div style={{ fontWeight: 600 }}>{h.title || "Tanpa judul"}</div>
+                    <div style={{ color: "#9C90AC", marginTop: 2 }}>
+                      {h.platform.toUpperCase()} · {h.mediaType}{h.quality ? " · " + h.quality : ""} · {new Date(h.createdAt).toLocaleString("id-ID")}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
       </div>
