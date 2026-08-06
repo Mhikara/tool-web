@@ -286,13 +286,23 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {(result.downloadVideo || result.videoUrl) && (
-                <a href={result.downloadVideo || ("/api/downloader/tiktok/file?url=" + encodeURIComponent(result.videoUrl) + "&filename=tiktok-video.mp4")}
-                  style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>Download Video (No WM)</a>
+              {(result.downloadVideoHd || result.videoHd) && (
+                <a href={result.downloadVideoHd || ("/api/downloader/tiktok/file?url=" + encodeURIComponent(result.videoHd) + "&filename=tiktok-hd.mp4")}
+                  style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "linear-gradient(90deg,#7C3AED,#A855F7)" }}>
+                  Download HD (No Watermark)
+                </a>
+              )}
+              {(result.downloadVideo || result.videoNormal || result.videoUrl) && (
+                <a href={result.downloadVideo || ("/api/downloader/tiktok/file?url=" + encodeURIComponent(result.videoNormal || result.videoUrl) + "&filename=tiktok-nowm.mp4")}
+                  style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "#374151" }}>
+                  Download Biasa (No Watermark)
+                </a>
               )}
               {(result.downloadAudio || result.audioUrl) && (
                 <a href={result.downloadAudio || ("/api/downloader/tiktok/file?url=" + encodeURIComponent(result.audioUrl) + "&filename=tiktok-audio.mp3")}
-                  style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "#EC4899" }}>Download Audio (MP3)</a>
+                  style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "#EC4899" }}>
+                  Download Audio (MP3)
+                </a>
               )}
             </div>
             {result.images && result.images.length > 0 && (

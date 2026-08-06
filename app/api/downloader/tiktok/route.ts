@@ -18,17 +18,25 @@ async function fetchTikwm(url: string) {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           Accept: "application/json",
         },
-        // Cache fetch ke upstream 5 menit di Next.js
         next: { revalidate: 300 },
       });
       if (!res.ok) continue;
       const data = await res.json();
       if (data.code === 0 && data.data) return data.data;
     } catch {
-      // coba endpoint berikutnya
+      /* next */
     }
   }
   return null;
+}
+
+function fileLink(mediaUrl: string, filename: string) {
+  return (
+    `/api/downloader/tiktok/file?url=` +
+    encodeURIComponent(mediaUrl) +
+    `&filename=` +
+    encodeURIComponent(filename)
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -47,10 +55,19 @@ export async function POST(req: NextRequest) {
 
     const data = await fetchTikwm(url.trim());
     if (!data) {
-      return jsonError("Gagal mengambil data TikTok. Cek link-nya atau coba lagi.", 502);
+      return jsonError(
+        "Gagal mengambil data TikTok. Cek link-nya atau coba lagi.",
+        502
+      );
     }
 
-    const videoUrl = data.hdplay || data.play || data.wmplay || null;
+    // HD no watermark, biasa no watermark, watermark (fallback)
+    const videoHd: string | null = data.hdplay || null;
+    const videoNormal: string | null = data.play || null;
+    const videoWm: string | null = data.wmplay || null;
+
+    // Prioritas tampilan utama
+    const videoUrl = videoHd || videoNormal || videoWm || null;
     const audioUrl = data.music || data.music_info?.play || null;
     const images: string[] = Array.isArray(data.images) ? data.images : [];
 
@@ -60,6 +77,9 @@ export async function POST(req: NextRequest) {
         title: data.title || data.desc || "Tanpa judul",
         cover: data.cover || data.origin_cover || null,
         videoUrl,
+        videoHd,
+        videoNormal,
+        videoWm,
         audioUrl,
         images,
         isSlideshow: images.length > 0 && !videoUrl,
@@ -75,19 +95,26 @@ export async function POST(req: NextRequest) {
           comments: data.comment_count || 0,
           shares: data.share_count || 0,
         },
-        downloadVideo: videoUrl
-          ? `/api/downloader/tiktok/file?url=${encodeURIComponent(videoUrl)}&filename=tiktok-video.mp4`
+        downloadVideoHd: videoHd
+          ? fileLink(videoHd, "tiktok-hd.mp4")
           : null,
+        downloadVideo: videoNormal
+          ? fileLink(videoNormal, "tiktok-nowm.mp4")
+          : videoUrl
+            ? fileLink(videoUrl, "tiktok-video.mp4")
+            : null,
         downloadAudio: audioUrl
-          ? `/api/downloader/tiktok/file?url=${encodeURIComponent(audioUrl)}&filename=tiktok-audio.mp3`
+          ? fileLink(audioUrl, "tiktok-audio.mp3")
           : null,
       },
       200,
-      // Info video: cache CDN 5 menit, SWR 15 menit
       { maxAge: 300, swr: 900 }
     );
   } catch (err: any) {
     console.error("[tiktok]", err);
-    return jsonError(err?.message || "Terjadi kesalahan saat memproses TikTok", 500);
+    return jsonError(
+      err?.message || "Terjadi kesalahan saat memproses TikTok",
+      500
+    );
   }
 }
