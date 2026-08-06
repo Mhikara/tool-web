@@ -9,6 +9,15 @@ export type SimpleTool = {
 
 export const toolsList: SimpleTool[] = [
   {
+    slug: "fake-data",
+    title: "Fake Data",
+    description: "Generator data dummy untuk tes form",
+    tag: "TEST",
+    icon: "🧪",
+    href: "/tools/fake-data",
+  },
+
+  {
     slug: "tiktok-hd-upload",
     title: "Upload TikTok HD",
     description: "Ambil video HD no-WM, unduh, siap upload",
