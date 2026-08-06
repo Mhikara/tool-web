@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
 function TiktokStudioContent() {
@@ -8,6 +8,18 @@ function TiktokStudioContent() {
 
   const [videoUrl, setVideoUrl] = useState("");
   const [title, setTitle] = useState("");
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("tiktok_upload_prefill");
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d.videoUrl) setVideoUrl(d.videoUrl);
+        if (d.title) setTitle(d.title);
+        sessionStorage.removeItem("tiktok_upload_prefill");
+      }
+    } catch {}
+  }, []);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
 

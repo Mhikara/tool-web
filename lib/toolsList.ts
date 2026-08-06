@@ -9,6 +9,15 @@ export type SimpleTool = {
 
 export const toolsList: SimpleTool[] = [
   {
+    slug: "tiktok-hd-upload",
+    title: "Upload TikTok HD",
+    description: "Ambil video HD no-WM, unduh, siap upload",
+    tag: "HD",
+    icon: "📤",
+    href: "/tools/tiktok-hd-upload",
+  },
+
+  {
     slug: "auto-clip",
     title: "Auto Clip",
     description: "Potong video jadi beberapa klip otomatis",
