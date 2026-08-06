@@ -96,7 +96,21 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
     finally { setLoading(false); }
   };
 
+  const forceDownload = async (href: string, filename: string) => {
+    const res = await fetch(href);
+    if (!res.ok) throw new Error("Gagal unduh file");
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  };
+
   const handleInstagram = async () => {
+    if (!input.trim()) { setStatus("Tempel link Instagram dulu."); return; }
     setLoading(true); setStatus("Memproses..."); setResult(null);
     try {
       const res = await fetch("/api/downloader/instagram", {
@@ -105,7 +119,19 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gagal");
-      setResult(data); setStatus("");
+      setResult(data);
+      // Langsung unduh: prioritas video, kalau tidak ada pakai foto
+      if (data.downloadVideo) {
+        setStatus("Mengunduh video...");
+        await forceDownload(data.downloadVideo, "instagram-video.mp4");
+        setStatus("Video berhasil diunduh.");
+      } else if (data.downloadImage) {
+        setStatus("Mengunduh foto...");
+        await forceDownload(data.downloadImage, "instagram-foto.jpg");
+        setStatus("Foto berhasil diunduh.");
+      } else {
+        setStatus("Media ditemukan, tapi link unduh kosong.");
+      }
     } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
     finally { setLoading(false); }
   };
