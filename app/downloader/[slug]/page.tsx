@@ -332,14 +332,23 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
 
         {result && slug === "instagram" && (
           <div style={{ marginTop: 20, background: "#1C1226", borderRadius: 12, padding: 16 }}>
-            {(result.cover || result.imageUrl) && (
-              <img src={result.cover || result.imageUrl} alt="" style={{ width: "100%", borderRadius: 8, marginBottom: 12 }} />
+            {(result.cover || result.imageHd || result.imageUrl) && (
+              <img src={result.cover || result.imageHd || result.imageUrl} alt="" style={{ width: "100%", borderRadius: 8, marginBottom: 12 }} />
+            )}
+            {result.note && (
+              <p style={{ fontSize: 12, color: "#FBBF24", marginBottom: 10 }}>{result.note}</p>
             )}
             {(result.downloadVideo || result.videoUrl) && (
-              <a href={result.downloadVideo || result.videoUrl} style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", marginBottom: 8 }}>Download Video</a>
+              <a href={result.downloadVideo || ("/api/downloader/instagram/file?url=" + encodeURIComponent(result.videoUrl) + "&filename=instagram-reel.mp4")}
+                style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", marginBottom: 8, background: "linear-gradient(90deg,#7C3AED,#A855F7)" }}>
+                Download Video (Reel)
+              </a>
             )}
-            {(result.downloadImage || (result.imageUrl && !result.videoUrl)) && (
-              <a href={result.downloadImage || result.imageUrl} style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none" }}>Download Foto</a>
+            {(result.downloadImage || result.imageUrl) && (
+              <a href={result.downloadImage || result.imageUrl}
+                style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", background: "#374151" }}>
+                Download Cover / Foto
+              </a>
             )}
           </div>
         )}
