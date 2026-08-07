@@ -6,19 +6,17 @@ export const maxDuration = 30;
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-function cleanInstagramUrl(raw: string): string {
+function cleanUrl(raw: string) {
   let u = raw.trim();
-  // hapus query ?igsh=...
   try {
-    const parsed = new URL(u);
-    parsed.search = "";
-    parsed.hash = "";
-    u = parsed.toString();
+    const p = new URL(u);
+    p.search = "";
+    p.hash = "";
+    u = p.toString();
   } catch {
     u = u.split("?")[0].split("#")[0];
   }
-  u = u.replace(/\/+$/, "/");
-  return u;
+  return u.replace(/\/+$/, "/");
 }
 
 function getShortcode(url: string): string | null {
@@ -48,11 +46,12 @@ function extractMeta(html: string, props: string[]): string | null {
   return null;
 }
 
-function findVideoInText(text: string): string | null {
+function findVideo(text: string): string | null {
   const patterns = [
     /"video_url"\s*:\s*"([^"]+)"/,
     /"contentUrl"\s*:\s*"(https:[^"]+\.mp4[^"]*)"/i,
-    /<meta[^>]+content=["'](https:[^"']+\.mp4[^"']*)["']/i,
+    /"playable_url_quality_hd"\s*:\s*"([^"]+)"/,
+    /"playable_url"\s*:\s*"([^"]+)"/,
     /(https:\/\/[^"'\s]+\.cdninstagram\.com[^"'\s]+\.mp4[^"'\s]*)/i,
     /(https:\/\/[^"'\s]+fbcdn\.net[^"'\s]+\.mp4[^"'\s]*)/i,
   ];
@@ -68,7 +67,7 @@ function findVideoInText(text: string): string | null {
   return null;
 }
 
-function findImageInText(text: string): string | null {
+function findImage(text: string): string | null {
   const patterns = [
     /"display_url"\s*:\s*"([^"]+)"/,
     /"og:image"\s*content="([^"]+)"/,
@@ -86,18 +85,9 @@ function findImageInText(text: string): string | null {
   return extractMeta(text, ["og:image", "og:image:secure_url"]);
 }
 
-function proxy(mediaUrl: string, filename: string) {
-  return (
-    "/api/downloader/instagram/file?url=" +
-    encodeURIComponent(mediaUrl) +
-    "&filename=" +
-    encodeURIComponent(filename)
-  );
-}
-
-async function fetchText(url: string, headers: Record<string, string> = {}) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": UA, Accept: "*/*", ...headers },
+async function fetchText(u: string) {
+  const res = await fetch(u, {
+    headers: { ...HEADERS },
     redirect: "follow",
   });
   if (!res.ok) return null;
@@ -121,19 +111,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const url = cleanInstagramUrl(raw);
-    const shortcode = getShortcode(url);
+    // Buang ?igsh=... dll
+    let clean = raw.trim().split("?")[0].split("#")[0];
+    clean = clean.replace(/\/+$/, "/");
+    if (!/^https?:\/\//i.test(clean)) clean = "https://" + clean;
 
+    const shortcode = getShortcode(clean);
     let videoUrl: string | null = null;
     let imageUrl: string | null = null;
     let title: string | null = null;
 
-    // 1) oEmbed resmi (sering kasih thumbnail + title)
+    // A) oEmbed
     try {
       const oe = await fetch(
         "https://www.instagram.com/api/v1/oembed/?url=" +
-          encodeURIComponent(url),
-        { headers: { "User-Agent": UA } }
+          encodeURIComponent(clean),
+        { headers: { "User-Agent": HEADERS["User-Agent"] } }
       );
       if (oe.ok) {
         const j = await oe.json();
@@ -144,88 +137,64 @@ export async function POST(req: NextRequest) {
       /* skip */
     }
 
-    // 2) Embed page
-    if (shortcode && (!videoUrl || !imageUrl)) {
+    // B) Embed
+    if (shortcode) {
       try {
-        const html = await fetchText(
-          `https://www.instagram.com/p/${shortcode}/embed/captioned/`,
-          { Referer: "https://www.instagram.com/" }
-        );
-        if (html) {
-          videoUrl = videoUrl || findVideoInText(html);
-          const vtag = html.match(/<video[^>]+src="([^"]+)"/i);
-          if (!videoUrl && vtag?.[1])
-            videoUrl = vtag[1].replace(/&amp;/g, "&");
-          imageUrl = imageUrl || findImageInText(html);
-          title = title || extractMeta(html, ["og:title"]);
-        }
+        const html = await (
+          await fetch(
+            `https://www.instagram.com/p/${shortcode}/embed/captioned/`,
+            { headers: HEADERS }
+          )
+        ).text();
+        const vtag = html.match(/<video[^>]+src="([^"]+)"/i);
+        if (vtag?.[1]) videoUrl = vtag[1].replace(/&amp;/g, "&");
+        videoUrl = videoUrl || findIn(html, "video");
+        imageUrl = imageUrl || findIn(html, "image");
+        title = title || extractMeta(html, ["og:title"]);
       } catch {
         /* skip */
       }
     }
 
-    // 3) ddinstagram mirror
+    // C) ddinstagram
     if (shortcode && !videoUrl) {
       for (const host of [
         "https://www.ddinstagram.com",
         "https://ddinstagram.com",
       ]) {
         try {
-          const html = await fetchText(
-            `\( {host}/p/ \){shortcode}/`,
-            { Referer: host + "/" }
-          );
-          if (html) {
-            videoUrl = videoUrl || extractMeta(html, [
-              "og:video",
-              "og:video:secure_url",
-            ]);
-            videoUrl = videoUrl || findVideoInText(html);
-            imageUrl =
-              imageUrl ||
-              extractMeta(html, ["og:image"]) ||
-              findImageInText(html);
-            if (videoUrl) break;
-          }
+          const html = await (
+            await fetch(`\( {host}/p/ \){shortcode}/`, {
+              headers: { ...HEADERS, Referer: host + "/" },
+            })
+          ).text();
+          videoUrl =
+            extractMeta(html, ["og:video", "og:video:secure_url"]) ||
+            findVideo(html);
+          imageUrl =
+            imageUrl ||
+            extractMeta(html, ["og:image"]) ||
+            findImage(html);
+          if (videoUrl) break;
         } catch {
           /* next */
         }
       }
     }
 
-    // 4) Proxy baca halaman (jina) — bypass sebagian bot-wall
+    // D) Proxy baca halaman (bypass bot wall)
     if (shortcode && !videoUrl) {
       try {
-        const html = await fetchText(
-          "https://r.jina.ai/http://www.instagram.com/reel/" +
-            shortcode +
-            "/",
-          { Accept: "text/plain" }
-        );
-        if (html) {
-          videoUrl = videoUrl || findVideoInText(html);
-          imageUrl = imageUrl || findImageInText(html);
-        }
-      } catch {
-        /* skip */
-      }
-    }
-
-    // 5) Halaman asli terakhir
-    if (!videoUrl && !imageUrl) {
-      try {
-        const html = await fetchText(url, {
-          Referer: "https://www.instagram.com/",
-        });
-        if (html) {
-          videoUrl = extractMeta(html, ["og:video", "og:video:secure_url"]);
-          videoUrl = videoUrl || findVideoInText(html);
-          imageUrl =
-            imageUrl ||
-            extractMeta(html, ["og:image"]) ||
-            findImageInText(html);
-          title = title || extractMeta(html, ["og:title"]);
-        }
+        const html = await (
+          await fetch(
+            "https://r.jina.ai/http://www.instagram.com/reel/" +
+              shortcode +
+              "/",
+            { headers: { Accept: "text/plain" } }
+          )
+        ).text();
+        videoUrl = findVideo(html) || videoUrl;
+        imageUrl = imageUrl || findImage(html);
       } catch {
         /* skip */
       }
@@ -235,23 +204,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Media tidak ditemukan. Pastikan post/reel PUBLIK (bukan private). Coba salin link dari aplikasi → Bagikan → Salin tautan (tanpa perlu buka di browser login).",
+            "Media tidak ditemukan. Pastikan post/reel PUBLIK. Salin tautan dari app Instagram → Bagikan → Salin tautan.",
         },
         { status: 404 }
       );
     }
 
+    const imageFinal = preferHdImage(imageUrl) || imageUrl;
+
     return NextResponse.json({
       title: title || "Instagram Media",
       videoUrl,
-      imageUrl,
-      imageHd: imageUrl,
-      cover: imageUrl,
+      imageUrl: imageFinal,
+      imageHd: imageFinal,
+      cover: imageFinal,
       downloadVideo: videoUrl
-        ? proxy(videoUrl, "instagram-video.mp4")
+        ? proxyLink(videoUrl, "instagram-video.mp4")
         : null,
-      downloadImage: imageUrl
-        ? proxy(imageUrl, "instagram-foto-hd.jpg")
+      downloadImage: imageFinal
+        ? proxyLink(imageFinal, "instagram-foto-hd.jpg")
         : null,
     });
   } catch (err: any) {
@@ -261,4 +232,40 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+function findVideo(text: string): string | null {
+  const patterns = [
+    /"video_url"\s*:\s*"([^"]+)"/,
+    /"contentUrl"\s*:\s*"(https:[^"]+\.mp4[^"]*)"/i,
+    /(https:\/\/[^"'\s]+\.cdninstagram\.com[^"'\s]+\.mp4[^"'\s]*)/i,
+    /(https:\/\/[^"'\s]+fbcdn\.net[^"'\s]+\.mp4[^"'\s]*)/i,
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m?.[1]) {
+      return m[1]
+        .replace(/\\u0026/g, "&")
+        .replace(/\\\//g, "/")
+        .replace(/&amp;/g, "&");
+    }
+  }
+  return null;
+}
+
+function findImage(text: string): string | null {
+  const patterns = [
+    /"display_url"\s*:\s*"([^"]+)"/,
+    /(https:\/\/[^"'\s]+\.cdninstagram\.com[^"'\s]+\.(?:jpg|jpeg|webp)[^"'\s]*)/i,
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m?.[1]) {
+      return m[1]
+        .replace(/\\u0026/g, "&")
+        .replace(/\\\//g, "/")
+        .replace(/&amp;/g, "&");
+    }
+  }
+  return extractMeta(text, ["og:image", "og:image:secure_url"]);
 }

@@ -28,7 +28,10 @@ export async function GET(req: NextRequest) {
     return new NextResponse(buf, {
       headers: {
         "Content-Type": ct,
-        "Content-Disposition": `attachment; filename="${filename.replace(/[^\w.\-]+/g, "_")}"`,
+        "Content-Disposition":
+          'attachment; filename="' +
+          filename.replace(/[^\w.\-]+/g, "_") +
+          '"',
       },
     });
   } catch (e: any) {
