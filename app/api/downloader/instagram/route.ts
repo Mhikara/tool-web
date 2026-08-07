@@ -3,21 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-
-function cleanUrl(raw: string) {
-  let u = raw.trim();
-  try {
-    const p = new URL(u);
-    p.search = "";
-    p.hash = "";
-    u = p.toString();
-  } catch {
-    u = u.split("?")[0].split("#")[0];
-  }
-  return u.replace(/\/+$/, "/");
-}
+const HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  Referer: "https://www.instagram.com/",
+};
 
 function getShortcode(url: string): string | null {
   const m = url.match(
@@ -70,7 +62,6 @@ function findVideo(text: string): string | null {
 function findImage(text: string): string | null {
   const patterns = [
     /"display_url"\s*:\s*"([^"]+)"/,
-    /"og:image"\s*content="([^"]+)"/,
     /(https:\/\/[^"'\s]+\.cdninstagram\.com[^"'\s]+\.(?:jpg|jpeg|webp)[^"'\s]*)/i,
   ];
   for (const re of patterns) {
@@ -85,13 +76,13 @@ function findImage(text: string): string | null {
   return extractMeta(text, ["og:image", "og:image:secure_url"]);
 }
 
-async function fetchText(u: string) {
-  const res = await fetch(u, {
-    headers: { ...HEADERS },
-    redirect: "follow",
-  });
-  if (!res.ok) return null;
-  return res.text();
+function proxyLink(mediaUrl: string, filename: string) {
+  return (
+    "/api/downloader/instagram/file?url=" +
+    encodeURIComponent(mediaUrl) +
+    "&filename=" +
+    encodeURIComponent(filename)
+  );
 }
 
 export async function POST(req: NextRequest) {
@@ -111,7 +102,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Buang ?igsh=... dll
     let clean = raw.trim().split("?")[0].split("#")[0];
     clean = clean.replace(/\/+$/, "/");
     if (!/^https?:\/\//i.test(clean)) clean = "https://" + clean;
@@ -121,7 +111,6 @@ export async function POST(req: NextRequest) {
     let imageUrl: string | null = null;
     let title: string | null = null;
 
-    // A) oEmbed
     try {
       const oe = await fetch(
         "https://www.instagram.com/api/v1/oembed/?url=" +
@@ -137,37 +126,33 @@ export async function POST(req: NextRequest) {
       /* skip */
     }
 
-    // B) Embed
     if (shortcode) {
       try {
-        const html = await (
-          await fetch(
-            `https://www.instagram.com/p/${shortcode}/embed/captioned/`,
-            { headers: HEADERS }
-          )
-        ).text();
+        const embedRes = await fetch(
+          `https://www.instagram.com/p/${shortcode}/embed/captioned/`,
+          { headers: HEADERS }
+        );
+        const html = await embedRes.text();
         const vtag = html.match(/<video[^>]+src="([^"]+)"/i);
         if (vtag?.[1]) videoUrl = vtag[1].replace(/&amp;/g, "&");
-        videoUrl = videoUrl || findIn(html, "video");
-        imageUrl = imageUrl || findIn(html, "image");
+        videoUrl = videoUrl || findVideo(html);
+        imageUrl = imageUrl || findImage(html);
         title = title || extractMeta(html, ["og:title"]);
       } catch {
         /* skip */
       }
     }
 
-    // C) ddinstagram
     if (shortcode && !videoUrl) {
       for (const host of [
         "https://www.ddinstagram.com",
         "https://ddinstagram.com",
       ]) {
         try {
-          const html = await (
-            await fetch(`\( {host}/p/ \){shortcode}/`, {
-              headers: { ...HEADERS, Referer: host + "/" },
-            })
-          ).text();
+          const r = await fetch(`\( {host}/p/ \){shortcode}/`, {
+            headers: { ...HEADERS, Referer: host + "/" },
+          });
+          const html = await r.text();
           videoUrl =
             extractMeta(html, ["og:video", "og:video:secure_url"]) ||
             findVideo(html);
@@ -182,17 +167,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // D) Proxy baca halaman (bypass bot wall)
     if (shortcode && !videoUrl) {
       try {
-        const html = await (
-          await fetch(
-            "https://r.jina.ai/http://www.instagram.com/reel/" +
-              shortcode +
-              "/",
-            { headers: { Accept: "text/plain" } }
-          )
-        ).text();
+        const r = await fetch(
+          "https://r.jina.ai/http://www.instagram.com/reel/" + shortcode + "/",
+          { headers: { Accept: "text/plain" } }
+        );
+        const html = await r.text();
         videoUrl = findVideo(html) || videoUrl;
         imageUrl = imageUrl || findImage(html);
       } catch {
@@ -204,25 +185,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Media tidak ditemukan. Pastikan post/reel PUBLIK. Salin tautan dari app Instagram → Bagikan → Salin tautan.",
+            "Media tidak ditemukan. Pastikan post/reel PUBLIK. Salin tautan dari app → Bagikan → Salin tautan.",
         },
         { status: 404 }
       );
     }
 
-    const imageFinal = preferHdImage(imageUrl) || imageUrl;
-
     return NextResponse.json({
       title: title || "Instagram Media",
       videoUrl,
-      imageUrl: imageFinal,
-      imageHd: imageFinal,
-      cover: imageFinal,
+      imageUrl,
+      imageHd: imageUrl,
+      cover: imageUrl,
       downloadVideo: videoUrl
         ? proxyLink(videoUrl, "instagram-video.mp4")
         : null,
-      downloadImage: imageFinal
-        ? proxyLink(imageFinal, "instagram-foto-hd.jpg")
+      downloadImage: imageUrl
+        ? proxyLink(imageUrl, "instagram-foto-hd.jpg")
         : null,
     });
   } catch (err: any) {
@@ -232,40 +211,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-function findVideo(text: string): string | null {
-  const patterns = [
-    /"video_url"\s*:\s*"([^"]+)"/,
-    /"contentUrl"\s*:\s*"(https:[^"]+\.mp4[^"]*)"/i,
-    /(https:\/\/[^"'\s]+\.cdninstagram\.com[^"'\s]+\.mp4[^"'\s]*)/i,
-    /(https:\/\/[^"'\s]+fbcdn\.net[^"'\s]+\.mp4[^"'\s]*)/i,
-  ];
-  for (const re of patterns) {
-    const m = text.match(re);
-    if (m?.[1]) {
-      return m[1]
-        .replace(/\\u0026/g, "&")
-        .replace(/\\\//g, "/")
-        .replace(/&amp;/g, "&");
-    }
-  }
-  return null;
-}
-
-function findImage(text: string): string | null {
-  const patterns = [
-    /"display_url"\s*:\s*"([^"]+)"/,
-    /(https:\/\/[^"'\s]+\.cdninstagram\.com[^"'\s]+\.(?:jpg|jpeg|webp)[^"'\s]*)/i,
-  ];
-  for (const re of patterns) {
-    const m = text.match(re);
-    if (m?.[1]) {
-      return m[1]
-        .replace(/\\u0026/g, "&")
-        .replace(/\\\//g, "/")
-        .replace(/&amp;/g, "&");
-    }
-  }
-  return extractMeta(text, ["og:image", "og:image:secure_url"]);
 }
