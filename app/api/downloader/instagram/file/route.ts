@@ -5,48 +5,35 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
-  const filename = req.nextUrl.searchParams.get("filename") || "instagram-media";
-
+  const filename =
+    req.nextUrl.searchParams.get("filename") || "instagram-media";
   if (!url) {
-    return NextResponse.json({ error: "URL file wajib" }, { status: 400 });
+    return NextResponse.json({ error: "URL wajib" }, { status: 400 });
   }
-
   try {
     const res = await fetch(url, {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         Referer: "https://www.instagram.com/",
         Origin: "https://www.instagram.com",
-        Accept: "*/*",
       },
       redirect: "follow",
     });
-
     if (!res.ok) {
-      return NextResponse.json(
-        { error: "Gagal ambil file dari Instagram CDN" },
-        { status: 502 }
-      );
+      return NextResponse.json({ error: "Gagal ambil file CDN" }, { status: 502 });
     }
-
-    const contentType =
-      res.headers.get("content-type") || "application/octet-stream";
-    const buffer = await res.arrayBuffer();
-    const safeName = filename.replace(/[^\w.\-]+/g, "_");
-
-    return new NextResponse(buffer, {
-      status: 200,
+    const buf = await res.arrayBuffer();
+    const ct = res.headers.get("content-type") || "application/octet-stream";
+    return new NextResponse(buf, {
       headers: {
-        "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${safeName}"`,
-        "Cache-Control": "public, max-age=3600",
+        "Content-Type": ct,
+        "Content-Disposition": `attachment; filename="${filename.replace(/[^\w.\-]+/g, "_")}"`,
       },
     });
-  } catch (err: any) {
-    console.error("[ig-file]", err);
+  } catch (e: any) {
     return NextResponse.json(
-      { error: err?.message || "Gagal unduh" },
+      { error: e?.message || "Gagal unduh" },
       { status: 500 }
     );
   }
