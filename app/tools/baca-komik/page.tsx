@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Item = {
@@ -72,16 +72,57 @@ export default function BacaKomikPage() {
     chapterId: string;
   } | null>(null);
 
+  const autoScrollRef = useRef(false);
+  const scrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [autoOn, setAutoOn] = useState(false);
+
   useEffect(() => {
     setHistory(loadHistory());
     setFavorites(loadFavorites());
   }, []);
 
+  const stopAutoScroll = useCallback(() => {
+    autoScrollRef.current = false;
+    setAutoOn(false);
+    if (scrollTimer.current) {
+      clearInterval(scrollTimer.current);
+      scrollTimer.current = null;
+    }
+  }, []);
+
+  const startAutoScroll = useCallback(() => {
+    stopAutoScroll();
+    autoScrollRef.current = true;
+    setAutoOn(true);
+    scrollTimer.current = setInterval(() => {
+      if (!autoScrollRef.current) return;
+      const max =
+        document.documentElement.scrollHeight - window.innerHeight;
+      if (window.scrollY >= max - 4) {
+        stopAutoScroll();
+        return;
+      }
+      window.scrollBy({ top: 2.2, behavior: "auto" });
+    }, 16);
+  }, [stopAutoScroll]);
+
+  const toggleAutoScroll = () => {
+    if (autoScrollRef.current) stopAutoScroll();
+    else startAutoScroll();
+  };
+
+  useEffect(() => {
+    return () => stopAutoScroll();
+  }, [stopAutoScroll]);
+
+  // stop auto scroll when leave reader
+  useEffect(() => {
+    if (!reader) stopAutoScroll();
+  }, [reader, stopAutoScroll]);
+
   const loadHome = useCallback(async () => {
     setLoading(true);
     setErr("");
-    setDetail(null);
-    setReader(null);
     try {
       const res = await fetch("/api/komik?action=home");
       const data = await res.json();
@@ -99,8 +140,26 @@ export default function BacaKomikPage() {
     loadHome();
   }, [loadHome]);
 
+  /** Kembali sesuai riwayat: reader → detail → list (bukan langsung home) */
+  const goBack = () => {
+    stopAutoScroll();
+    if (reader) {
+      setReader(null);
+      return;
+    }
+    if (detail) {
+      setDetail(null);
+      return;
+    }
+    loadHome();
+  };
+
   const search = async () => {
-    if (!q.trim()) return loadHome();
+    if (!q.trim()) {
+      setDetail(null);
+      setReader(null);
+      return loadHome();
+    }
     setLoading(true);
     setErr("");
     setDetail(null);
@@ -158,7 +217,7 @@ export default function BacaKomikPage() {
         title: data.title,
         chapters: data.chapters || [],
         mangaId,
-        cover: item.cover,
+        cover: item.cover || data.cover || null,
       });
       setHistory(loadHistory());
     } catch (e: any) {
@@ -172,6 +231,7 @@ export default function BacaKomikPage() {
     const chapterId = ch.id || ch.url;
     setLoading(true);
     setErr("");
+    stopAutoScroll();
     try {
       const res = await fetch(
         "/api/komik?action=read&chapterId=" + encodeURIComponent(chapterId)
@@ -233,7 +293,6 @@ export default function BacaKomikPage() {
             fontSize: 16,
             cursor: "pointer",
           }}
-          aria-label="Favorit"
         >
           {fav ? "⭐" : "☆"}
         </button>
@@ -254,19 +313,20 @@ export default function BacaKomikPage() {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={item.cover}
-              alt=""
+              alt={item.title}
               style={{
                 width: "100%",
                 aspectRatio: "3/4",
                 objectFit: "cover",
                 display: "block",
+                background: "#2a1f35",
               }}
             />
           ) : (
             <div
               style={{
                 aspectRatio: "3/4",
-                background: "#2a1f35",
+                background: "linear-gradient(160deg,#2a1f35,#1a1220)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -339,26 +399,40 @@ export default function BacaKomikPage() {
                 Hapus riwayat
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                if (reader) setReader(null);
-                else if (detail) {
-                  setDetail(null);
-                } else loadHome();
-              }}
-              style={{
-                background: "#A855F7",
-                border: "none",
-                color: "#fff",
-                borderRadius: 8,
-                padding: "6px 12px",
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              {reader || detail ? "Kembali" : "Refresh"}
-            </button>
+            {(reader || detail) && (
+              <button
+                type="button"
+                onClick={goBack}
+                style={{
+                  background: "#A855F7",
+                  border: "none",
+                  color: "#fff",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                Kembali
+              </button>
+            )}
+            {!reader && !detail && (
+              <button
+                type="button"
+                onClick={loadHome}
+                style={{
+                  background: "#A855F7",
+                  border: "none",
+                  color: "#fff",
+                  borderRadius: 8,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                Refresh
+              </button>
+            )}
           </div>
         </div>
 
@@ -366,18 +440,12 @@ export default function BacaKomikPage() {
           📖 Baca Komik
         </h1>
         <p style={{ fontSize: 12, color: "#9C90AC", marginBottom: 10 }}>
-          Favorit & riwayat tersimpan di HP ini
+          Ketuk layar saat baca = auto scroll · ketuk lagi = stop
         </p>
 
         {!detail && !reader && (
           <>
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                marginBottom: 12,
-              }}
-            >
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <button
                 type="button"
                 onClick={() => setTab("home")}
@@ -450,35 +518,98 @@ export default function BacaKomikPage() {
         {loading && (
           <p style={{ fontSize: 13, color: "#9C90AC" }}>Memuat...</p>
         )}
-        {err && !loading && tab === "home" && (
+        {err && !loading && !reader && (
           <p style={{ fontSize: 13, color: "#FBBF24" }}>{err}</p>
         )}
 
+        {/* READER: ketuk layar = toggle auto scroll */}
         {reader && (
           <div>
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
-              {reader.title}
-            </h2>
-            <p style={{ fontSize: 11, color: "#86EFAC", marginBottom: 12 }}>
-              ✓ Chapter ditandai sudah dibaca
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 8,
+                gap: 8,
+              }}
+            >
+              <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0, flex: 1 }}>
+                {reader.title}
+              </h2>
+              <button
+                type="button"
+                onClick={toggleAutoScroll}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: autoOn ? "#22c55e" : "#374151",
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {autoOn ? "⏸ Stop scroll" : "▶ Auto scroll"}
+              </button>
+            </div>
+            <p style={{ fontSize: 11, color: "#86EFAC", marginBottom: 8 }}>
+              ✓ Sudah dibaca · ketuk gambar = {autoOn ? "stop" : "mulai"} auto
+              scroll
             </p>
-            {reader.pages.map((src, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={i}
-                src={src}
-                alt=""
-                loading="lazy"
-                style={{ width: "100%", display: "block", background: "#111" }}
-              />
-            ))}
+            <div
+              onClick={toggleAutoScroll}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") toggleAutoScroll();
+              }}
+              style={{ cursor: "pointer" }}
+            >
+              {reader.pages.map((src, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={i}
+                  src={src}
+                  alt=""
+                  loading="lazy"
+                  draggable={false}
+                  style={{
+                    width: "100%",
+                    display: "block",
+                    background: "#111",
+                    pointerEvents: "none",
+                  }}
+                />
+              ))}
+            </div>
+            {autoOn && (
+              <div
+                style={{
+                  position: "fixed",
+                  bottom: 16,
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  background: "rgba(34,197,94,0.9)",
+                  color: "#fff",
+                  padding: "8px 14px",
+                  borderRadius: 20,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  zIndex: 50,
+                }}
+              >
+                Auto scroll aktif · ketuk layar untuk stop
+              </div>
+            )}
           </div>
         )}
 
         {!reader && detail && (
           <div>
             <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-              {detail.cover && (
+              {detail.cover ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={detail.cover}
@@ -489,8 +620,24 @@ export default function BacaKomikPage() {
                     objectFit: "cover",
                     borderRadius: 8,
                     flexShrink: 0,
+                    background: "#2a1f35",
                   }}
                 />
+              ) : (
+                <div
+                  style={{
+                    width: 90,
+                    height: 120,
+                    borderRadius: 8,
+                    background: "#2a1f35",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  📖
+                </div>
               )}
               <div style={{ flex: 1 }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700 }}>{detail.title}</h2>
