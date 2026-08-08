@@ -3,12 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const BASES = [
-  process.env.MANHWADESU_BASE || "https://manhwadesu.im",
-  "https://manhwadesu.com",
-  "https://manhwadesu.art",
-  "https://manhwadesu.tech",
-];
+const PRIMARY = (process.env.MANHWADESU_BASE || "https://manhwadesu.im").replace(
+  /\/$/,
+  ""
+);
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -27,250 +25,260 @@ function decodeHtml(s: string) {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+    .replace(/&gt;/g, ">")
+    .replace(/\\u0026/g, "&");
 }
 
-async function fetchDirect(url: string, base: string) {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": UA,
-      Accept: "text/html,application/xhtml+xml",
-      "Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
-      Referer: base + "/",
+/** Ambil teks halaman lewat beberapa jalur (hindari Cloudflare Vercel) */
+async function loadPage(targetUrl: string): Promise<string | null> {
+  const attempts: { url: string; headers?: Record<string, string> }[] = [
+    {
+      url: "https://r.jina.ai/" + targetUrl,
+      headers: {
+        Accept: "text/plain",
+        "User-Agent": UA,
+        "X-Return-Format": "markdown",
+      },
     },
-    redirect: "follow",
-  });
-  if (!res.ok) return null;
-  const html = await res.text();
-  if (html.length < 400) return null;
-  if (/just a moment|cf-browser-verification|attention required/i.test(html)) {
-    return null;
-  }
-  return { html, base: new URL(res.url).origin };
-}
-
-/** Bypass Cloudflare lewat Jina reader */
-async function fetchViaJina(url: string, base: string) {
-  const jinaUrl = "https://r.jina.ai/http://" + url.replace(/^https?:\/\//, "");
-  const res = await fetch(jinaUrl, {
-    headers: {
-      Accept: "text/html",
-      "User-Agent": UA,
-      "X-Return-Format": "html",
+    {
+      url: "https://r.jina.ai/http://" + targetUrl.replace(/^https?:\/\//, ""),
+      headers: { Accept: "text/plain", "User-Agent": UA },
     },
-  });
-  if (!res.ok) return null;
-  const html = await res.text();
-  if (html.length < 400) return null;
-  return { html, base };
-}
+    {
+      url:
+        "https://api.allorigins.win/raw?url=" + encodeURIComponent(targetUrl),
+      headers: { "User-Agent": UA },
+    },
+    {
+      url: targetUrl,
+      headers: {
+        "User-Agent": UA,
+        Accept: "text/html",
+        Referer: PRIMARY + "/",
+      },
+    },
+  ];
 
-async function fetchHtml(
-  pathOrUrl: string
-): Promise<{ html: string; base: string } | null> {
-  const isFull = /^https?:\/\//i.test(pathOrUrl);
-
-  for (const base of BASES) {
-    const url = isFull ? pathOrUrl : base.replace(/\/$/, "") + pathOrUrl;
+  for (const a of attempts) {
     try {
-      const direct = await fetchDirect(url, base);
-      if (direct) return direct;
+      const res = await fetch(a.url, {
+        headers: a.headers,
+        redirect: "follow",
+      });
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (text.length < 300) continue;
+      if (/just a moment|cf-browser-verification|attention required/i.test(text))
+        continue;
+      return text;
     } catch {
       /* next */
     }
   }
-
-  // Fallback Jina untuk tiap mirror
-  for (const base of BASES) {
-    const url = isFull ? pathOrUrl : base.replace(/\/$/, "") + pathOrUrl;
-    try {
-      const via = await fetchViaJina(url, base);
-      if (via) return via;
-    } catch {
-      /* next */
-    }
-  }
-
   return null;
 }
 
-function parseList(html: string, base: string) {
+function slugToTitle(slug: string) {
+  return slug
+    .replace(/\/$/, "")
+    .split("/")
+    .pop()!
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function parseList(text: string, base: string) {
   const items: { title: string; url: string; cover: string | null }[] = [];
+  const seen = new Set<string>();
 
-  // Link /komik/slug
-  const linkRe = new RegExp(
-    'href=["\'](https?:\\/\\/[^"\']+\\/komik\\/[^"\'\\/]+\\/?|\\/komik\\/[^"\'\\/]+\\/?)["\'][^>]*(?:title=["\']([^"\']+)["\'])?',
-    "gi"
-  );
-  let m: RegExpExecArray | null;
-  while ((m = linkRe.exec(html)) !== null) {
-    const url = absUrl(base, m[1]);
-    if (/\/komik\/\?|\/komik\/page/i.test(url)) continue;
-    let title = decodeHtml((m[2] || "").trim());
-    if (!title) {
-      const slug = url.split("/komik/")[1]?.replace(/\/$/, "") || "";
-      title = slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  // Markdown / HTML link ke /komik/slug
+  const patterns = [
+    /\[([^\]]+)\]\((https?:\/\/[^)]+\/komik\/[^)\s]+)\)/gi,
+    /href=["'](https?:\/\/[^"']+\/komik\/[^"'\/]+\/?)["']/gi,
+    /(https?:\/\/[^\s"'<>]+\/komik\/[a-z0-9-]+\/?)/gi,
+  ];
+
+  for (const re of patterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      let title = "";
+      let url = "";
+      if (m.length >= 3 && m[2]?.includes("/komik/")) {
+        title = decodeHtml(m[1].trim());
+        url = m[2];
+      } else {
+        url = m[1];
+        title = slugToTitle(url);
+      }
+      url = absUrl(base, url).replace(/\/$/, "") + "/";
+      if (/\/komik\/\?|\/komik\/page|order=/i.test(url)) continue;
+      const key = url.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({ title: title || slugToTitle(url), url, cover: null });
+      if (items.length >= 48) return items;
     }
-    if (!title || /chapter|ch\./i.test(title)) continue;
-    if (items.some((x) => x.url === url)) continue;
-    items.push({ title, url, cover: null });
-    if (items.length >= 40) break;
   }
-
-  // Cover dari markdown-style jina atau img dekat
-  const imgRe = new RegExp(
-    '(https?:\\/\\/[^\\s"\']+(?:jpg|jpeg|png|webp)[^\\s"\']*)',
-    "gi"
-  );
-  // biarkan cover null dulu jika tidak yakin
-
   return items;
 }
 
-function parseChapters(html: string, base: string) {
+function parseChapters(text: string, base: string) {
   const chapters: { title: string; url: string }[] = [];
-  const re = new RegExp(
-    'href=["\']([^"\']+(?:chapter|ch-)[^"\']*)["\'][^>]*>\\s*([^<]{1,120})',
-    "gi"
-  );
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
-    const url = absUrl(base, m[1]);
-    const title = decodeHtml(m[2].trim());
-    if (!title) continue;
-    if (chapters.some((c) => c.url === url)) continue;
-    chapters.push({ title, url });
-  }
-  // pola chapter di path
-  if (chapters.length < 2) {
-    const re2 = new RegExp(
-      'href=["\'](https?:\\/\\/[^"\']+-chapter-\\d+[^"\']*|\\/[^"\']+-chapter-\\d+[^"\']*)["\']',
-      "gi"
-    );
-    while ((m = re2.exec(html)) !== null) {
-      const url = absUrl(base, m[1]);
-      const title =
-        url.match(/chapter-[\w-]+/i)?.[0]?.replace(/-/g, " ") || "Chapter";
-      if (chapters.some((c) => c.url === url)) continue;
-      chapters.push({ title, url });
+  const seen = new Set<string>();
+
+  const patterns = [
+    /\[([^\]]*(?:ch\.?|chapter|bab)[^\]]*)\]\((https?:\/\/[^)]+)\)/gi,
+    /\[([^\]]+)\]\((https?:\/\/[^)]+-chapter-\d+[^)]*)\)/gi,
+    /href=["'](https?:\/\/[^"']+-chapter-\d+[^"']*)["'][^>]*>\s*([^<]*)/gi,
+    /(https?:\/\/[^\s"'<>]+-chapter-\d+[^\s"'<>]*)/gi,
+  ];
+
+  for (const re of patterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      let title = "";
+      let url = "";
+      if (m[2] && m[1] && m[2].startsWith("http")) {
+        title = decodeHtml(m[1].trim());
+        url = m[2];
+      } else if (m[2] && m[1]?.startsWith("http")) {
+        url = m[1];
+        title = decodeHtml((m[2] || "").trim());
+      } else {
+        url = m[1];
+        title = url.match(/chapter-[\w-]+/i)?.[0]?.replace(/-/g, " ") || "Chapter";
+      }
+      url = absUrl(base, url);
+      if (seen.has(url)) continue;
+      seen.add(url);
+      chapters.push({ title: title || "Chapter", url });
     }
   }
   return chapters.slice(0, 200);
 }
 
-function parsePages(html: string, base: string) {
+function parsePages(text: string) {
   const pages: string[] = [];
-  const imgRe = new RegExp(
-    '(?:src|data-src|data-lazy-src)=["\'](https?:\\/\\/[^"\']+\\.(?:webp|jpg|jpeg|png)[^"\']*)["\']',
-    "gi"
-  );
-  let m: RegExpExecArray | null;
-  while ((m = imgRe.exec(html)) !== null) {
-    let src = decodeHtml(m[1]);
-    if (/avatar|logo|icon|ads|banner|pixel|emoji|favicon/i.test(src)) continue;
-    src = absUrl(base, src);
-    if (!pages.includes(src)) pages.push(src);
-  }
-  // jina kadang keluarkan URL mentah di baris
-  if (pages.length < 2) {
-    const re2 =
-      /https?:\/\/[^\s"'<>]+(?:wp-content|cdn)[^\s"'<>]+\.(?:webp|jpg|jpeg|png)/gi;
-    while ((m = re2.exec(html)) !== null) {
-      const src = m[0];
-      if (/avatar|logo|icon|ads/i.test(src)) continue;
-      if (!pages.includes(src)) pages.push(src);
+  const seen = new Set<string>();
+
+  const patterns = [
+    /!\[([^\]]*)\]\((https?:\/\/[^)]+\.(?:webp|jpg|jpeg|png)[^)]*)\)/gi,
+    /(?:src|data-src)=["'](https?:\/\/[^"']+\.(?:webp|jpg|jpeg|png)[^"']*)["']/gi,
+    /(https?:\/\/[^\s"'<>]+(?:wp-content|cdn|i\d)[^\s"'<>]*\.(?:webp|jpg|jpeg|png)[^\s"'<>]*)/gi,
+  ];
+
+  for (const re of patterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const src = decodeHtml(m[2] || m[1]);
+      if (!src || !/^https?:\/\//i.test(src)) continue;
+      if (/avatar|logo|icon|ads|banner|emoji|favicon|pixel|spinner/i.test(src))
+        continue;
+      if (seen.has(src)) continue;
+      seen.add(src);
+      pages.push(src);
     }
   }
   return pages;
 }
 
-function parseTitle(html: string) {
-  const h1 = html.match(/<h1[^>]*>([^<]+)<\/h1>/i)?.[1]?.trim();
-  if (h1) return decodeHtml(h1);
-  const og = html.match(
+function parseTitle(text: string) {
+  const h1 = text.match(/^#\s+(.+)$/m)?.[1]?.trim();
+  if (h1) return h1;
+  const h1html = text.match(/<h1[^>]*>([^<]+)<\/h1>/i)?.[1]?.trim();
+  if (h1html) return decodeHtml(h1html);
+  const og = text.match(
     /property=["']og:title["'][^>]*content=["']([^"']+)["']/i
   )?.[1];
   if (og) return decodeHtml(og);
-  const md = html.match(/^#\s+(.+)$/m)?.[1];
-  if (md) return md.trim();
   return "Komik";
-}
-
-function extractOgImage(html: string, base: string) {
-  const m = html.match(
-    /property=["']og:image["'][^>]*content=["']([^"']+)["']/i
-  );
-  return m?.[1] ? absUrl(base, m[1]) : null;
 }
 
 export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams;
     const action = sp.get("action") || "home";
-    const url = sp.get("url") || "";
+    const urlParam = sp.get("url") || "";
     const q = sp.get("q") || "";
+    const base = PRIMARY;
 
     if (action === "home") {
-      const got = await fetchHtml("/komik/?order=update");
-      if (!got) {
-        return NextResponse.json(
-          {
-            error:
-              "Tidak bisa mengakses ManhwaDesu dari server (Cloudflare). Coba domain lain di MANHWADESU_BASE.",
-          },
-          { status: 502 }
-        );
+      const text = await loadPage(base + "/komik/?order=update");
+      if (!text) {
+        // fallback homepage
+        const home = await loadPage(base + "/");
+        if (!home) {
+          return NextResponse.json(
+            {
+              error:
+                "Server masih diblokir sumber. Coba lagi 1–2 menit, atau ganti MANHWADESU_BASE.",
+              list: [],
+            },
+            { status: 200 }
+          );
+        }
+        return NextResponse.json({
+          base,
+          list: parseList(home, base),
+        });
       }
-      const list = parseList(got.html, got.base);
-      return NextResponse.json({ base: got.base, list });
+      return NextResponse.json({ base, list: parseList(text, base) });
     }
 
     if (action === "search") {
       if (!q.trim()) {
-        return NextResponse.json({ error: "Query kosong" }, { status: 400 });
+        return NextResponse.json({ error: "Query kosong", list: [] }, { status: 400 });
       }
-      const got = await fetchHtml("/?s=" + encodeURIComponent(q.trim()));
-      if (!got) {
-        return NextResponse.json({ error: "Gagal search" }, { status: 502 });
+      const text = await loadPage(
+        base + "/?s=" + encodeURIComponent(q.trim())
+      );
+      if (!text) {
+        return NextResponse.json({ base, list: [], error: "Search gagal, coba lagi" });
       }
-      return NextResponse.json({
-        base: got.base,
-        list: parseList(got.html, got.base),
-      });
+      return NextResponse.json({ base, list: parseList(text, base) });
     }
 
     if (action === "detail") {
-      if (!url) {
+      if (!urlParam) {
         return NextResponse.json({ error: "url wajib" }, { status: 400 });
       }
-      const got = await fetchHtml(url);
-      if (!got) {
-        return NextResponse.json({ error: "Gagal buka detail" }, { status: 502 });
+      const text = await loadPage(urlParam);
+      if (!text) {
+        return NextResponse.json(
+          { error: "Gagal buka detail. Coba judul lain." },
+          { status: 502 }
+        );
       }
       return NextResponse.json({
-        title: parseTitle(got.html),
-        chapters: parseChapters(got.html, got.base),
-        cover: extractOgImage(got.html, got.base),
+        title: parseTitle(text),
+        chapters: parseChapters(text, base),
+        cover: null,
       });
     }
 
     if (action === "read") {
-      if (!url) {
+      if (!urlParam) {
         return NextResponse.json({ error: "url wajib" }, { status: 400 });
       }
-      const got = await fetchHtml(url);
-      if (!got) {
-        return NextResponse.json({ error: "Gagal buka chapter" }, { status: 502 });
+      const text = await loadPage(urlParam);
+      if (!text) {
+        return NextResponse.json(
+          { error: "Gagal buka chapter. Coba lagi." },
+          { status: 502 }
+        );
       }
-      const pages = parsePages(got.html, got.base);
+      const pages = parsePages(text);
       if (!pages.length) {
         return NextResponse.json(
-          { error: "Gambar chapter tidak ditemukan." },
+          {
+            error:
+              "Gambar belum terbaca (lazy-load). Coba chapter lain atau buka ulang.",
+          },
           { status: 404 }
         );
       }
       return NextResponse.json({
-        title: parseTitle(got.html),
+        title: parseTitle(text),
         pages,
       });
     }
@@ -279,7 +287,7 @@ export async function GET(req: NextRequest) {
   } catch (err: any) {
     console.error("[komik]", err);
     return NextResponse.json(
-      { error: err?.message || "Gagal" },
+      { error: err?.message || "Gagal", list: [] },
       { status: 500 }
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 type Item = { title: string; url: string; cover: string | null };
@@ -14,14 +14,13 @@ export default function BacaKomikPage() {
   const [detail, setDetail] = useState<{
     title: string;
     chapters: Chapter[];
-    cover: string | null;
   } | null>(null);
   const [reader, setReader] = useState<{
     title: string;
     pages: string[];
   } | null>(null);
 
-  const loadHome = async () => {
+  const loadHome = useCallback(async () => {
     setLoading(true);
     setErr("");
     setDetail(null);
@@ -29,18 +28,20 @@ export default function BacaKomikPage() {
     try {
       const res = await fetch("/api/komik?action=home");
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Gagal");
       setList(data.list || []);
+      if (!data.list?.length) {
+        setErr(data.error || "Belum ada data. Ketuk Coba lagi.");
+      }
     } catch (e: any) {
-      setErr(e.message);
+      setErr(e.message || "Gagal memuat");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadHome();
-  }, []);
+  }, [loadHome]);
 
   const search = async () => {
     if (!q.trim()) return loadHome();
@@ -53,8 +54,8 @@ export default function BacaKomikPage() {
         "/api/komik?action=search&q=" + encodeURIComponent(q.trim())
       );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Gagal");
       setList(data.list || []);
+      if (!data.list?.length) setErr(data.error || "Tidak ketemu");
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -72,11 +73,8 @@ export default function BacaKomikPage() {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gagal");
-      setDetail({
-        title: data.title,
-        chapters: data.chapters || [],
-        cover: data.cover,
-      });
+      setDetail({ title: data.title, chapters: data.chapters || [] });
+      if (!data.chapters?.length) setErr("Chapter belum terbaca, coba judul lain");
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -102,50 +100,56 @@ export default function BacaKomikPage() {
     }
   };
 
-  const wrap = {
-    background: "#0B0710",
-    minHeight: "100vh",
-    color: "#F3EEFA",
-    fontFamily: "sans-serif",
-    padding: 16,
-  } as const;
-
   return (
-    <div style={wrap}>
+    <div
+      style={{
+        background: "#0B0710",
+        minHeight: "100vh",
+        color: "#F3EEFA",
+        fontFamily: "sans-serif",
+        padding: 16,
+      }}
+    >
       <div style={{ maxWidth: 560, margin: "0 auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
           <Link href="/" style={{ color: "#9C90AC", fontSize: 13 }}>
             ← Beranda
           </Link>
-          {(detail || reader) && (
-            <button
-              type="button"
-              onClick={() => {
-                if (reader) setReader(null);
-                else {
-                  setDetail(null);
-                  loadHome();
-                }
-              }}
-              style={{
-                background: "transparent",
-                border: "1px solid #444",
-                color: "#C4B5FD",
-                borderRadius: 8,
-                padding: "4px 10px",
-                fontSize: 12,
-              }}
-            >
-              Kembali
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (reader) setReader(null);
+              else if (detail) {
+                setDetail(null);
+                loadHome();
+              } else loadHome();
+            }}
+            style={{
+              background: "#A855F7",
+              border: "none",
+              color: "#fff",
+              borderRadius: 8,
+              padding: "6px 12px",
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            {reader || detail ? "Kembali" : "Coba lagi"}
+          </button>
         </div>
 
         <h1 style={{ fontSize: 20, fontWeight: 700, margin: "12px 0 4px" }}>
           📖 Baca Komik
         </h1>
         <p style={{ fontSize: 12, color: "#9C90AC", marginBottom: 12 }}>
-          Sumber ManhwaDesu · tampilan tanpa iklan di app ini
+          ManhwaDesu · tanpa iklan di layar baca
         </p>
 
         {!detail && !reader && (
@@ -184,54 +188,36 @@ export default function BacaKomikPage() {
         {loading && (
           <p style={{ fontSize: 13, color: "#9C90AC" }}>Memuat...</p>
         )}
-        {err && (
-          <p style={{ fontSize: 13, color: "#F87171", marginBottom: 10 }}>
+        {err && !loading && (
+          <p style={{ fontSize: 13, color: "#FBBF24", marginBottom: 10 }}>
             {err}
           </p>
         )}
 
-        {/* READER — hanya gambar chapter */}
         {reader && (
           <div>
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>
               {reader.title}
             </h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-              {reader.pages.map((src, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={i}
-                  src={src}
-                  alt={`hal ${i + 1}`}
-                  loading="lazy"
-                  style={{ width: "100%", display: "block", background: "#111" }}
-                  referrerPolicy="no-referrer"
-                />
-              ))}
-            </div>
+            {reader.pages.map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={src}
+                alt=""
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                style={{ width: "100%", display: "block", background: "#111" }}
+              />
+            ))}
           </div>
         )}
 
-        {/* DETAIL + chapter list */}
         {!reader && detail && (
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 700 }}>{detail.title}</h2>
-            {detail.cover && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={detail.cover}
-                alt=""
-                style={{
-                  width: 120,
-                  borderRadius: 8,
-                  margin: "10px 0",
-                }}
-                referrerPolicy="no-referrer"
-              />
-            )}
-            <p style={{ fontSize: 12, color: "#9C90AC", marginBottom: 8 }}>
-              {detail.chapters.length} chapter
-            </p>
+            <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 10 }}>
+              {detail.title}
+            </h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {detail.chapters.map((c) => (
                 <button
@@ -255,7 +241,6 @@ export default function BacaKomikPage() {
           </div>
         )}
 
-        {/* LIST */}
         {!detail && !reader && (
           <div
             style={{
@@ -271,58 +256,21 @@ export default function BacaKomikPage() {
                 onClick={() => openDetail(item.url)}
                 style={{
                   textAlign: "left",
-                  padding: 0,
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  padding: 12,
                   borderRadius: 12,
-                  overflow: "hidden",
+                  border: "1px solid rgba(255,255,255,0.08)",
                   background: "#1C1226",
                   color: "#F3EEFA",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  minHeight: 72,
                 }}
               >
-                {item.cover ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.cover}
-                    alt=""
-                    style={{
-                      width: "100%",
-                      aspectRatio: "3/4",
-                      objectFit: "cover",
-                    }}
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div
-                    style={{
-                      aspectRatio: "3/4",
-                      background: "#2a1f35",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    📖
-                  </div>
-                )}
-                <div
-                  style={{
-                    padding: 8,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    lineHeight: 1.3,
-                  }}
-                >
-                  {item.title}
-                </div>
+                {item.title}
               </button>
             ))}
           </div>
         )}
-
-        <p style={{ marginTop: 24, fontSize: 11, color: "#6B6178" }}>
-          Konten dari ManhwaDesu. Hanya menampilkan gambar chapter — iklan situs
-          tidak dimuat di UI ini.
-        </p>
       </div>
     </div>
   );
