@@ -9,8 +9,13 @@ function coverUrl(mangaId: string, fileName: string | null | undefined) {
   if (!mangaId || !fileName || fileName === "null" || fileName === "undefined") {
     return null;
   }
-  // format resmi MangaDex (ukuran 256 biar cepat)
-  return `https://uploads.mangadex.org/covers/\( {mangaId}/ \){fileName}.256.jpg`;
+  return (
+    "https://uploads.mangadex.org/covers/" +
+    mangaId +
+    "/" +
+    fileName +
+    ".256.jpg"
+  );
 }
 
 function titleOf(manga: any) {
@@ -20,7 +25,7 @@ function titleOf(manga: any) {
     t.en ||
     t.ja ||
     t["ja-ro"] ||
-    Object.values(t)[0] ||
+    (Object.values(t)[0] as string) ||
     "Tanpa judul"
   );
 }
@@ -28,7 +33,7 @@ function titleOf(manga: any) {
 function pickCover(manga: any): string | null {
   const rels = manga?.relationships || [];
   const cover = rels.find((r: any) => r.type === "cover_art");
-  const fileName = cover?.attributes?.fileName;
+  const fileName = cover?.attributes?.fileName as string | undefined;
   return coverUrl(manga.id, fileName);
 }
 
@@ -76,7 +81,6 @@ export async function GET(req: NextRequest) {
       const list = (json.data || []).map(mapManga);
       return NextResponse.json({
         source: "MangaDex",
-        note: "Cover dari MangaDex CDN",
         list,
       });
     }
@@ -126,10 +130,16 @@ export async function GET(req: NextRequest) {
 
       const [infoRes, feedRes] = await Promise.all([
         fetch(infoUrl.toString(), {
-          headers: { Accept: "application/json", "User-Agent": "tool-web-komik/1.0" },
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "tool-web-komik/1.0",
+          },
         }),
         fetch(feedUrl.toString(), {
-          headers: { Accept: "application/json", "User-Agent": "tool-web-komik/1.0" },
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "tool-web-komik/1.0",
+          },
         }),
       ]);
 
@@ -138,15 +148,13 @@ export async function GET(req: NextRequest) {
       }
       const info = await infoRes.json();
       const feed = await feedRes.json();
-      const chapters = (feed.data || []).map((c: any) => ({
-        id: c.id,
-        title:
-          (c.attributes.chapter
-            ? "Ch. " + c.attributes.chapter
-            : "Chapter") +
-          (c.attributes.title ? " — " + c.attributes.title : ""),
-        url: c.id,
-      }));
+      const chapters = (feed.data || []).map((c: any) => {
+        const num = c.attributes?.chapter;
+        const chTitle = c.attributes?.title;
+        let label = num ? "Ch. " + num : "Chapter";
+        if (chTitle) label = label + " — " + chTitle;
+        return { id: c.id, title: label, url: c.id };
+      });
 
       return NextResponse.json({
         title: titleOf(info.data),
@@ -168,16 +176,25 @@ export async function GET(req: NextRequest) {
       });
       if (!res.ok) {
         return NextResponse.json(
-          { error: "Gagal ambil halaman chapter" },
+          { error: "Gagal ambil halaman chapter. Coba chapter lain." },
           { status: 502 }
         );
       }
       const json = await res.json();
-      const base = json.baseUrl;
-      const hash = json.chapter?.hash;
-      const files: string[] = json.chapter?.data || json.chapter?.dataSaver || [];
-      const pages = files.map((f: string) => `\( {base}/data/ \){hash}/${f}`);
-      return NextResponse.json({ title: "Chapter", pages });
+      const base = json.baseUrl as string;
+      const hash = json.chapter?.hash as string;
+      const files: string[] =
+        json.chapter?.data || json.chapter?.dataSaver || [];
+      if (!base || !hash || !files.length) {
+        return NextResponse.json(
+          { error: "Halaman chapter kosong / tidak tersedia." },
+          { status: 404 }
+        );
+      }
+      const pages = files.map(function (f: string) {
+        return base + "/data/" + hash + "/" + f;
+      });
+      return NextResponse.json({ title: "Chapter", pages: pages });
     }
 
     return NextResponse.json({ error: "action tidak dikenal" }, { status: 400 });
