@@ -3,12 +3,30 @@
   "buildCommand": "next build --webpack",
   "installCommand": "npm install --prefer-offline --no-audit --no-fund",
   "regions": ["sin1"],
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
-      ]
+  "functions": {
+    "app/api/clip/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "app/api/downloader/youtube/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "app/api/downloader/tiktok/file/route.ts": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "app/api/downloader/terabox/route.ts": {
+      "memory": 512,
+      "maxDuration": 30
+    },
+    "app/api/downloader/instagram/audio/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "app/api/**/*.ts": {
+      "memory": 256,
+      "maxDuration": 15
     }
-  ]
+  }
 }
