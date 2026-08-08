@@ -9,6 +9,15 @@ export type SimpleTool = {
 
 export const toolsList: SimpleTool[] = [
   {
+    slug: "baca-komik",
+    title: "Baca Komik",
+    description: "Baca manhwa dari ManhwaDesu tanpa iklan",
+    tag: "KOMIK",
+    icon: "📖",
+    href: "/tools/baca-komik",
+  },
+
+  {
     slug: "fake-data",
     title: "Fake Data",
     description: "Generator data dummy untuk tes form",
