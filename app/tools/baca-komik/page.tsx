@@ -55,6 +55,8 @@ function saveFavorites(list: Item[]) {
 
 export default function BacaKomikPage() {
   const [q, setQ] = useState("");
+  const [genres, setGenres] = useState<{ id: string; name: string }[]>([]);
+  const [genreId, setGenreId] = useState("");
   const [latest, setLatest] = useState<Item[]>([]);
   const [popular, setPopular] = useState<Item[]>([]);
   const [topRated, setTopRated] = useState<Item[]>([]);
@@ -147,6 +149,13 @@ export default function BacaKomikPage() {
     loadHome();
   }, [loadHome]);
 
+  useEffect(() => {
+    fetch("/api/komik?action=genres")
+      .then((r) => r.json())
+      .then((d) => setGenres(d.genres || []))
+      .catch(() => {});
+  }, []);
+
   const goBack = () => {
     stopAutoScroll();
     if (reader) {
@@ -159,8 +168,9 @@ export default function BacaKomikPage() {
     }
   };
 
-  const search = async () => {
-    if (!q.trim()) {
+  const search = async (overrideGenre?: string) => {
+    const g = overrideGenre !== undefined ? overrideGenre : genreId;
+    if (!q.trim() && !g) {
       setSearchList(null);
       return loadHome();
     }
@@ -170,9 +180,10 @@ export default function BacaKomikPage() {
     setReader(null);
     setTab("home");
     try {
-      const res = await fetch(
-        "/api/komik?action=search&q=" + encodeURIComponent(q.trim())
-      );
+      let api =
+        "/api/komik?action=search&q=" + encodeURIComponent(q.trim());
+      if (g) api += "&genre=" + encodeURIComponent(g);
+      const res = await fetch(api);
       const data = await res.json();
       setSearchList(data.list || []);
       if (!data.list?.length) setErr("Tidak ketemu");
@@ -575,6 +586,63 @@ export default function BacaKomikPage() {
                     Cari
                   </button>
                 </div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, color: "#9C90AC", marginBottom: 6 }}>
+                    Genre
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      maxHeight: 120,
+                      overflowY: "auto",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGenreId("");
+                        setSearchList(null);
+                        loadHome();
+                      }}
+                      style={{
+                        padding: "5px 10px",
+                        borderRadius: 16,
+                        border: "none",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        background: !genreId ? "#A855F7" : "#1C1226",
+                        color: "#fff",
+                      }}
+                    >
+                      Semua
+                    </button>
+                    {genres.map((g) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => {
+                          setGenreId(g.id);
+                          search(g.id);
+                        }}
+                        style={{
+                          padding: "5px 10px",
+                          borderRadius: 16,
+                          border: "none",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: genreId === g.id ? "#7C3AED" : "#1C1226",
+                          color: "#fff",
+                        }}
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
               </>
             )}
           </>

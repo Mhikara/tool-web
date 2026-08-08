@@ -136,18 +136,54 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ section: section, list: list });
     }
 
+    if (action === "genres") {
+      const res = await fetch(MD + "/manga/tag", {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "tool-web-komik/1.0",
+        },
+        next: { revalidate: 86400 },
+      });
+      if (!res.ok) {
+        return NextResponse.json({ genres: [] }, { status: 502 });
+      }
+      const json = await res.json();
+      const genres = (json.data || [])
+        .filter(function (tag: any) {
+          return tag?.attributes?.group === "genre";
+        })
+        .map(function (tag: any) {
+          return {
+            id: tag.id,
+            name: tag.attributes?.name?.en || tag.attributes?.name?.id || "Genre",
+          };
+        })
+        .sort(function (a: any, b: any) {
+          return a.name.localeCompare(b.name);
+        });
+      return NextResponse.json({ genres: genres });
+    }
+
     if (action === "search") {
-      if (!q.trim()) {
-        return NextResponse.json({ error: "Query kosong", list: [] }, { status: 400 });
+      const genreId = sp.get("genre") || "";
+      if (!q.trim() && !genreId) {
+        return NextResponse.json({ error: "Isi judul atau pilih genre", list: [] }, { status: 400 });
       }
       const url = new URL(MD + "/manga");
       url.searchParams.set("limit", "24");
-      url.searchParams.set("title", q.trim());
+      if (q.trim()) {
+        url.searchParams.set("title", q.trim());
+      }
+      if (genreId) {
+        url.searchParams.append("includedTags[]", genreId);
+        url.searchParams.set("includedTagsMode", "AND");
+      }
       url.searchParams.append("availableTranslatedLanguage[]", "id");
       url.searchParams.append("includes[]", "cover_art");
       url.searchParams.append("contentRating[]", "safe");
       url.searchParams.append("contentRating[]", "suggestive");
       url.searchParams.append("contentRating[]", "erotica");
+      url.searchParams.set("order[latestUploadedChapter]", "desc");
 
       const res = await fetch(url.toString(), {
         headers: {
