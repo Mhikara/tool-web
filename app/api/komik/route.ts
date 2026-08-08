@@ -37,12 +37,42 @@ function pickCover(manga: any): string | null {
   return coverUrl(manga.id, fileName);
 }
 
+/** Full Color / Official Colored = bergambar (warna) */
+function isColored(manga: any): boolean {
+  const tags = manga?.attributes?.tags || [];
+  for (const tag of tags) {
+    const name = (tag?.attributes?.name?.en || "").toLowerCase();
+    if (
+      name.includes("full color") ||
+      name.includes("official color") ||
+      name === "colored" ||
+      name.includes("webtoon")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function mapManga(m: any) {
+  const colored = isColored(m);
+  const status = m?.attributes?.status || "unknown";
   return {
     id: m.id,
     title: String(titleOf(m)),
     url: m.id,
     cover: pickCover(m),
+    colored: colored,
+    colorLabel: colored ? "Bergambar" : "Tidak bergambar",
+    status: status,
+    statusLabel:
+      status === "completed"
+        ? "Tamat"
+        : status === "ongoing"
+          ? "Ongoing"
+          : status === "hiatus"
+            ? "Hiatus"
+            : status,
   };
 }
 
@@ -79,10 +109,7 @@ export async function GET(req: NextRequest) {
       }
       const json = await res.json();
       const list = (json.data || []).map(mapManga);
-      return NextResponse.json({
-        source: "MangaDex",
-        list,
-      });
+      return NextResponse.json({ source: "MangaDex", list: list });
     }
 
     if (action === "search") {
@@ -148,6 +175,7 @@ export async function GET(req: NextRequest) {
       }
       const info = await infoRes.json();
       const feed = await feedRes.json();
+      const mapped = mapManga(info.data);
       const chapters = (feed.data || []).map((c: any) => {
         const num = c.attributes?.chapter;
         const chTitle = c.attributes?.title;
@@ -157,9 +185,13 @@ export async function GET(req: NextRequest) {
       });
 
       return NextResponse.json({
-        title: titleOf(info.data),
-        cover: pickCover(info.data),
-        chapters,
+        title: mapped.title,
+        cover: mapped.cover,
+        colored: mapped.colored,
+        colorLabel: mapped.colorLabel,
+        status: mapped.status,
+        statusLabel: mapped.statusLabel,
+        chapters: chapters,
       });
     }
 

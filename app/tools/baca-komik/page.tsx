@@ -8,6 +8,10 @@ type Item = {
   title: string;
   url: string;
   cover: string | null;
+  colored?: boolean;
+  colorLabel?: string;
+  status?: string;
+  statusLabel?: string;
 };
 
 type Chapter = {
@@ -349,6 +353,34 @@ export default function BacaKomikPage() {
               }}
             >
               {item.title}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: "2px 6px",
+                  borderRadius: 6,
+                  background: item.colored ? "rgba(34,197,94,0.2)" : "rgba(148,163,184,0.2)",
+                  color: item.colored ? "#86EFAC" : "#94A3B8",
+                }}
+              >
+                {item.colorLabel || (item.colored ? "Bergambar" : "Tidak bergambar")}
+              </span>
+              {item.statusLabel && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: "2px 6px",
+                    borderRadius: 6,
+                    background: "rgba(168,85,247,0.2)",
+                    color: "#D8B4FE",
+                  }}
+                >
+                  {item.statusLabel}
+                </span>
+              )}
             </div>
             <div style={{ fontSize: 11, color: "#A78BFA", marginTop: 4 }}>
               Lihat chapter →
