@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import BookmarkList from "@/components/baca-komik/BookmarkList";
 import AddBookmarkForm from "@/components/baca-komik/AddBookmarkForm";
 
@@ -14,6 +15,13 @@ export default function BacaKomikPage() {
         membuka situs sumber resmi di tab baru — konten komik tetap dibaca
         langsung dari sana.
       </p>
+
+      <Link
+        href="/tools/baca-komik/search"
+        className="inline-block mb-6 text-sm bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700"
+      >
+        🔍 Cari Manga/Manhwa Baru
+      </Link>
 
       <AddBookmarkForm onAdded={() => setRefreshKey((k) => k + 1)} />
 
