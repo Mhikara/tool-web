@@ -28,6 +28,15 @@ export default function AddBookmarkForm({ onAdded }: { onAdded: () => void }) {
     onAdded();
   }
 
+  function searchOnManhwaDesu() {
+    if (!title.trim()) {
+      alert("Isi judul dulu sebelum cari");
+      return;
+    }
+    const url = `https://manhwadesu.im/?s=${encodeURIComponent(title.trim())}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <form
       onSubmit={handleSubmit}
@@ -36,17 +45,28 @@ export default function AddBookmarkForm({ onAdded }: { onAdded: () => void }) {
       <h2 className="font-semibold text-sm text-gray-700">
         Tambah Judul ke Bookmark
       </h2>
-      <input
-        type="text"
-        placeholder="Judul komik"
-        className="w-full border rounded px-3 py-2 text-sm"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        required
-      />
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="Judul komik"
+          className="flex-1 border rounded px-3 py-2 text-sm"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+        />
+        <button
+          type="button"
+          onClick={searchOnManhwaDesu}
+          className="text-xs bg-purple-600 text-white px-3 rounded whitespace-nowrap hover:bg-purple-700"
+        >
+          🔍 Cari
+        </button>
+      </div>
+
       <input
         type="url"
-        placeholder="Link halaman komik (sumber asli)"
+        placeholder="Tempel link halaman komik dari hasil pencarian di atas"
         className="w-full border rounded px-3 py-2 text-sm"
         value={sourceUrl}
         onChange={(e) => setSourceUrl(e.target.value)}
