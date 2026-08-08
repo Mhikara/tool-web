@@ -37,7 +37,6 @@ function pickCover(manga: any): string | null {
   return coverUrl(manga.id, fileName);
 }
 
-/** Full Color / Official Colored = bergambar (warna) */
 function isColored(manga: any): boolean {
   const tags = manga?.attributes?.tags || [];
   for (const tag of tags) {
@@ -76,6 +75,28 @@ function mapManga(m: any) {
   };
 }
 
+async function fetchMangaList(orderKey: string, orderVal: string, limit: number) {
+  const url = new URL(MD + "/manga");
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("order[" + orderKey + "]", orderVal);
+  url.searchParams.append("availableTranslatedLanguage[]", "id");
+  url.searchParams.append("includes[]", "cover_art");
+  url.searchParams.append("contentRating[]", "safe");
+  url.searchParams.append("contentRating[]", "suggestive");
+  url.searchParams.append("contentRating[]", "erotica");
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "tool-web-komik/1.0",
+    },
+    next: { revalidate: 180 },
+  });
+  if (!res.ok) return [];
+  const json = await res.json();
+  return (json.data || []).map(mapManga);
+}
+
 export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams;
@@ -83,33 +104,36 @@ export async function GET(req: NextRequest) {
     const id = sp.get("id") || "";
     const q = sp.get("q") || "";
     const chapterId = sp.get("chapterId") || "";
+    const section = sp.get("section") || "latest";
 
+    // home: 3 bagian sekaligus
     if (action === "home") {
-      const url = new URL(MD + "/manga");
-      url.searchParams.set("limit", "24");
-      url.searchParams.set("order[latestUploadedChapter]", "desc");
-      url.searchParams.append("availableTranslatedLanguage[]", "id");
-      url.searchParams.append("includes[]", "cover_art");
-      url.searchParams.append("contentRating[]", "safe");
-      url.searchParams.append("contentRating[]", "suggestive");
-      url.searchParams.append("contentRating[]", "erotica");
-
-      const res = await fetch(url.toString(), {
-        headers: {
-          Accept: "application/json",
-          "User-Agent": "tool-web-komik/1.0",
-        },
-        next: { revalidate: 120 },
+      const [latest, popular, topRated] = await Promise.all([
+        fetchMangaList("latestUploadedChapter", "desc", 18),
+        fetchMangaList("followedCount", "desc", 18),
+        fetchMangaList("rating", "desc", 18),
+      ]);
+      return NextResponse.json({
+        source: "MangaDex",
+        latest: latest,
+        popular: popular,
+        topRated: topRated,
+        // kompatibel UI lama
+        list: latest,
       });
-      if (!res.ok) {
-        return NextResponse.json(
-          { error: "Gagal memuat daftar", list: [] },
-          { status: 502 }
-        );
+    }
+
+    // satu section saja
+    if (action === "section") {
+      let list: any[] = [];
+      if (section === "popular") {
+        list = await fetchMangaList("followedCount", "desc", 24);
+      } else if (section === "rating") {
+        list = await fetchMangaList("rating", "desc", 24);
+      } else {
+        list = await fetchMangaList("latestUploadedChapter", "desc", 24);
       }
-      const json = await res.json();
-      const list = (json.data || []).map(mapManga);
-      return NextResponse.json({ source: "MangaDex", list: list });
+      return NextResponse.json({ section: section, list: list });
     }
 
     if (action === "search") {
@@ -147,41 +171,57 @@ export async function GET(req: NextRequest) {
       const infoUrl = new URL(MD + "/manga/" + mangaId);
       infoUrl.searchParams.append("includes[]", "cover_art");
 
-      const feedUrl = new URL(MD + "/manga/" + mangaId + "/feed");
-      feedUrl.searchParams.set("limit", "100");
-      feedUrl.searchParams.append("translatedLanguage[]", "id");
-      feedUrl.searchParams.set("order[chapter]", "desc");
-      feedUrl.searchParams.append("contentRating[]", "safe");
-      feedUrl.searchParams.append("contentRating[]", "suggestive");
-      feedUrl.searchParams.append("contentRating[]", "erotica");
+      // ambil sampai 500 chapter (paginasi)
+      const allChapters: any[] = [];
+      let offset = 0;
+      for (let i = 0; i < 5; i++) {
+        const feedUrl = new URL(MD + "/manga/" + mangaId + "/feed");
+        feedUrl.searchParams.set("limit", "100");
+        feedUrl.searchParams.set("offset", String(offset));
+        feedUrl.searchParams.append("translatedLanguage[]", "id");
+        feedUrl.searchParams.set("order[chapter]", "asc");
+        feedUrl.searchParams.append("contentRating[]", "safe");
+        feedUrl.searchParams.append("contentRating[]", "suggestive");
+        feedUrl.searchParams.append("contentRating[]", "erotica");
 
-      const [infoRes, feedRes] = await Promise.all([
-        fetch(infoUrl.toString(), {
+        const feedRes = await fetch(feedUrl.toString(), {
           headers: {
             Accept: "application/json",
             "User-Agent": "tool-web-komik/1.0",
           },
-        }),
-        fetch(feedUrl.toString(), {
-          headers: {
-            Accept: "application/json",
-            "User-Agent": "tool-web-komik/1.0",
-          },
-        }),
-      ]);
+        });
+        if (!feedRes.ok) break;
+        const feed = await feedRes.json();
+        const batch = feed.data || [];
+        allChapters.push(...batch);
+        if (batch.length < 100) break;
+        offset += 100;
+      }
 
+      const infoRes = await fetch(infoUrl.toString(), {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "tool-web-komik/1.0",
+        },
+      });
       if (!infoRes.ok) {
         return NextResponse.json({ error: "Judul tidak ditemukan" }, { status: 404 });
       }
       const info = await infoRes.json();
-      const feed = await feedRes.json();
       const mapped = mapManga(info.data);
-      const chapters = (feed.data || []).map((c: any) => {
+
+      const chapters = allChapters.map((c: any, idx: number) => {
         const num = c.attributes?.chapter;
         const chTitle = c.attributes?.title;
-        let label = num ? "Ch. " + num : "Chapter";
+        let label = num ? "Ch. " + num : "Chapter " + (idx + 1);
         if (chTitle) label = label + " — " + chTitle;
-        return { id: c.id, title: label, url: c.id };
+        return {
+          id: c.id,
+          title: label,
+          url: c.id,
+          number: num || String(idx + 1),
+          index: idx,
+        };
       });
 
       return NextResponse.json({
@@ -192,6 +232,7 @@ export async function GET(req: NextRequest) {
         status: mapped.status,
         statusLabel: mapped.statusLabel,
         chapters: chapters,
+        totalChapters: chapters.length,
       });
     }
 
@@ -226,7 +267,11 @@ export async function GET(req: NextRequest) {
       const pages = files.map(function (f: string) {
         return base + "/data/" + hash + "/" + f;
       });
-      return NextResponse.json({ title: "Chapter", pages: pages });
+      return NextResponse.json({
+        title: "Chapter",
+        pages: pages,
+        pageCount: pages.length,
+      });
     }
 
     return NextResponse.json({ error: "action tidak dikenal" }, { status: 400 });

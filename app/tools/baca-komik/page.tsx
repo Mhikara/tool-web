@@ -18,6 +18,8 @@ type Chapter = {
   id?: string;
   title: string;
   url: string;
+  number?: string;
+  index?: number;
 };
 
 const HISTORY_KEY = "komik_read_history_v1";
@@ -31,17 +33,14 @@ function loadHistory(): Record<string, number> {
     return {};
   }
 }
-
 function markRead(chapterId: string) {
   const h = loadHistory();
   h[chapterId] = Date.now();
   localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
 }
-
 function isRead(chapterId: string, history: Record<string, number>) {
   return Boolean(history[chapterId]);
 }
-
 function loadFavorites(): Item[] {
   if (typeof window === "undefined") return [];
   try {
@@ -50,17 +49,19 @@ function loadFavorites(): Item[] {
     return [];
   }
 }
-
 function saveFavorites(list: Item[]) {
   localStorage.setItem(FAV_KEY, JSON.stringify(list));
 }
 
 export default function BacaKomikPage() {
   const [q, setQ] = useState("");
-  const [list, setList] = useState<Item[]>([]);
+  const [latest, setLatest] = useState<Item[]>([]);
+  const [popular, setPopular] = useState<Item[]>([]);
+  const [topRated, setTopRated] = useState<Item[]>([]);
+  const [searchList, setSearchList] = useState<Item[] | null>(null);
+  const [homeTab, setHomeTab] = useState<"latest" | "popular" | "rating">("latest");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [note, setNote] = useState("");
   const [tab, setTab] = useState<"home" | "fav">("home");
   const [history, setHistory] = useState<Record<string, number>>({});
   const [favorites, setFavorites] = useState<Item[]>([]);
@@ -69,11 +70,14 @@ export default function BacaKomikPage() {
     chapters: Chapter[];
     mangaId: string;
     cover?: string | null;
+    colorLabel?: string;
+    statusLabel?: string;
   } | null>(null);
   const [reader, setReader] = useState<{
     title: string;
     pages: string[];
     chapterId: string;
+    chapterIndex: number;
   } | null>(null);
 
   const autoScrollRef = useRef(false);
@@ -100,8 +104,7 @@ export default function BacaKomikPage() {
     setAutoOn(true);
     scrollTimer.current = setInterval(() => {
       if (!autoScrollRef.current) return;
-      const max =
-        document.documentElement.scrollHeight - window.innerHeight;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
       if (window.scrollY >= max - 4) {
         stopAutoScroll();
         return;
@@ -115,11 +118,7 @@ export default function BacaKomikPage() {
     else startAutoScroll();
   };
 
-  useEffect(() => {
-    return () => stopAutoScroll();
-  }, [stopAutoScroll]);
-
-  // stop auto scroll when leave reader
+  useEffect(() => () => stopAutoScroll(), [stopAutoScroll]);
   useEffect(() => {
     if (!reader) stopAutoScroll();
   }, [reader, stopAutoScroll]);
@@ -127,12 +126,16 @@ export default function BacaKomikPage() {
   const loadHome = useCallback(async () => {
     setLoading(true);
     setErr("");
+    setSearchList(null);
     try {
       const res = await fetch("/api/komik?action=home");
       const data = await res.json();
-      setList(data.list || []);
-      setNote(data.note || data.source || "");
-      if (!data.list?.length) setErr(data.error || "Kosong");
+      setLatest(data.latest || data.list || []);
+      setPopular(data.popular || []);
+      setTopRated(data.topRated || []);
+      if (!(data.latest || data.list || []).length) {
+        setErr(data.error || "Kosong");
+      }
     } catch (e: any) {
       setErr(e.message || "Gagal");
     } finally {
@@ -144,7 +147,6 @@ export default function BacaKomikPage() {
     loadHome();
   }, [loadHome]);
 
-  /** Kembali sesuai riwayat: reader → detail → list (bukan langsung home) */
   const goBack = () => {
     stopAutoScroll();
     if (reader) {
@@ -155,13 +157,11 @@ export default function BacaKomikPage() {
       setDetail(null);
       return;
     }
-    loadHome();
   };
 
   const search = async () => {
     if (!q.trim()) {
-      setDetail(null);
-      setReader(null);
+      setSearchList(null);
       return loadHome();
     }
     setLoading(true);
@@ -174,7 +174,7 @@ export default function BacaKomikPage() {
         "/api/komik?action=search&q=" + encodeURIComponent(q.trim())
       );
       const data = await res.json();
-      setList(data.list || []);
+      setSearchList(data.list || []);
       if (!data.list?.length) setErr("Tidak ketemu");
     } catch (e: any) {
       setErr(e.message);
@@ -198,6 +198,9 @@ export default function BacaKomikPage() {
           title: item.title,
           url: item.url,
           cover: item.cover,
+          colored: item.colored,
+          colorLabel: item.colorLabel,
+          statusLabel: item.statusLabel,
         },
         ...favorites.filter((f) => (f.id || f.url) !== id),
       ];
@@ -222,6 +225,8 @@ export default function BacaKomikPage() {
         chapters: data.chapters || [],
         mangaId,
         cover: item.cover || data.cover || null,
+        colorLabel: data.colorLabel || item.colorLabel,
+        statusLabel: data.statusLabel || item.statusLabel,
       });
       setHistory(loadHistory());
     } catch (e: any) {
@@ -231,8 +236,9 @@ export default function BacaKomikPage() {
     }
   };
 
-  const openRead = async (ch: Chapter) => {
+  const openRead = async (ch: Chapter, index?: number) => {
     const chapterId = ch.id || ch.url;
+    const idx = index ?? ch.index ?? 0;
     setLoading(true);
     setErr("");
     stopAutoScroll();
@@ -248,6 +254,7 @@ export default function BacaKomikPage() {
         title: ch.title || data.title,
         pages: data.pages || [],
         chapterId,
+        chapterIndex: idx,
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e: any) {
@@ -257,12 +264,23 @@ export default function BacaKomikPage() {
     }
   };
 
-  const clearHistory = () => {
-    localStorage.removeItem(HISTORY_KEY);
-    setHistory({});
+  const goChapter = (dir: -1 | 1) => {
+    if (!detail || !reader) return;
+    const next = reader.chapterIndex + dir;
+    if (next < 0 || next >= detail.chapters.length) return;
+    openRead(detail.chapters[next], next);
   };
 
-  const displayList = tab === "fav" ? favorites : list;
+  const displayList =
+    tab === "fav"
+      ? favorites
+      : searchList
+        ? searchList
+        : homeTab === "popular"
+          ? popular
+          : homeTab === "rating"
+            ? topRated
+            : latest;
 
   const card = (item: Item) => {
     const id = item.id || item.url;
@@ -295,7 +313,6 @@ export default function BacaKomikPage() {
             border: "none",
             background: "rgba(0,0,0,0.55)",
             fontSize: 16,
-            cursor: "pointer",
           }}
         >
           {fav ? "⭐" : "☆"}
@@ -310,7 +327,6 @@ export default function BacaKomikPage() {
             background: "transparent",
             color: "#F3EEFA",
             width: "100%",
-            cursor: "pointer",
           }}
         >
           {item.cover ? (
@@ -330,7 +346,7 @@ export default function BacaKomikPage() {
             <div
               style={{
                 aspectRatio: "3/4",
-                background: "linear-gradient(160deg,#2a1f35,#1a1220)",
+                background: "#2a1f35",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -354,18 +370,23 @@ export default function BacaKomikPage() {
             >
               {item.title}
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+            <div
+              style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}
+            >
               <span
                 style={{
                   fontSize: 10,
                   fontWeight: 700,
                   padding: "2px 6px",
                   borderRadius: 6,
-                  background: item.colored ? "rgba(34,197,94,0.2)" : "rgba(148,163,184,0.2)",
+                  background: item.colored
+                    ? "rgba(34,197,94,0.2)"
+                    : "rgba(148,163,184,0.2)",
                   color: item.colored ? "#86EFAC" : "#94A3B8",
                 }}
               >
-                {item.colorLabel || (item.colored ? "Bergambar" : "Tidak bergambar")}
+                {item.colorLabel ||
+                  (item.colored ? "Bergambar" : "Tidak bergambar")}
               </span>
               {item.statusLabel && (
                 <span
@@ -382,9 +403,6 @@ export default function BacaKomikPage() {
                 </span>
               )}
             </div>
-            <div style={{ fontSize: 11, color: "#A78BFA", marginTop: 4 }}>
-              Lihat chapter →
-            </div>
           </div>
         </button>
       </div>
@@ -399,7 +417,7 @@ export default function BacaKomikPage() {
         color: "#F3EEFA",
         fontFamily: "sans-serif",
         padding: 16,
-        paddingBottom: 40,
+        paddingBottom: 48,
       }}
     >
       <div style={{ maxWidth: 560, margin: "0 auto" }}>
@@ -414,70 +432,52 @@ export default function BacaKomikPage() {
           <Link href="/" style={{ color: "#9C90AC", fontSize: 13 }}>
             ← Beranda
           </Link>
-          <div style={{ display: "flex", gap: 6 }}>
-            {Object.keys(history).length > 0 && !reader && !detail && (
-              <button
-                type="button"
-                onClick={clearHistory}
-                style={{
-                  background: "transparent",
-                  border: "1px solid #444",
-                  color: "#9C90AC",
-                  borderRadius: 8,
-                  padding: "6px 10px",
-                  fontSize: 11,
-                }}
-              >
-                Hapus riwayat
-              </button>
-            )}
-            {(reader || detail) && (
-              <button
-                type="button"
-                onClick={goBack}
-                style={{
-                  background: "#A855F7",
-                  border: "none",
-                  color: "#fff",
-                  borderRadius: 8,
-                  padding: "6px 12px",
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
-                Kembali
-              </button>
-            )}
-            {!reader && !detail && (
-              <button
-                type="button"
-                onClick={loadHome}
-                style={{
-                  background: "#A855F7",
-                  border: "none",
-                  color: "#fff",
-                  borderRadius: 8,
-                  padding: "6px 12px",
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
-                Refresh
-              </button>
-            )}
-          </div>
+          {(reader || detail) && (
+            <button
+              type="button"
+              onClick={goBack}
+              style={{
+                background: "#A855F7",
+                border: "none",
+                color: "#fff",
+                borderRadius: 8,
+                padding: "6px 12px",
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              Kembali
+            </button>
+          )}
+          {!reader && !detail && (
+            <button
+              type="button"
+              onClick={loadHome}
+              style={{
+                background: "#A855F7",
+                border: "none",
+                color: "#fff",
+                borderRadius: 8,
+                padding: "6px 12px",
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              Refresh
+            </button>
+          )}
         </div>
 
         <h1 style={{ fontSize: 20, fontWeight: 700, margin: "12px 0 4px" }}>
           📖 Baca Komik
         </h1>
         <p style={{ fontSize: 12, color: "#9C90AC", marginBottom: 10 }}>
-          Ketuk layar saat baca = auto scroll · ketuk lagi = stop
+          Chapter lengkap · Terbaru · Terpopuler · Rating
         </p>
 
         {!detail && !reader && (
           <>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <button
                 type="button"
                 onClick={() => setTab("home")}
@@ -492,7 +492,7 @@ export default function BacaKomikPage() {
                   color: "#fff",
                 }}
               >
-                Semua
+                Jelajah
               </button>
               <button
                 type="button"
@@ -513,36 +513,69 @@ export default function BacaKomikPage() {
             </div>
 
             {tab === "home" && (
-              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && search()}
-                  placeholder="Cari judul..."
-                  style={{
-                    flex: 1,
-                    padding: 10,
-                    borderRadius: 10,
-                    border: "1px solid #333",
-                    background: "#1C1226",
-                    color: "#fff",
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={search}
-                  style={{
-                    padding: "10px 14px",
-                    borderRadius: 10,
-                    border: "none",
-                    background: "#A855F7",
-                    color: "#fff",
-                    fontWeight: 700,
-                  }}
-                >
-                  Cari
-                </button>
-              </div>
+              <>
+                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                  {(
+                    [
+                      ["latest", "Terbaru"],
+                      ["popular", "Terpopuler"],
+                      ["rating", "Rating"],
+                    ] as const
+                  ).map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => {
+                        setHomeTab(k);
+                        setSearchList(null);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "8px 4px",
+                        borderRadius: 8,
+                        border: "none",
+                        fontWeight: 700,
+                        fontSize: 12,
+                        background:
+                          homeTab === k && !searchList ? "#7C3AED" : "#1C1226",
+                        color: "#fff",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && search()}
+                    placeholder="Cari judul..."
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      borderRadius: 10,
+                      border: "1px solid #333",
+                      background: "#1C1226",
+                      color: "#fff",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={search}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      border: "none",
+                      background: "#A855F7",
+                      color: "#fff",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Cari
+                  </button>
+                </div>
+              </>
             )}
           </>
         )}
@@ -554,19 +587,18 @@ export default function BacaKomikPage() {
           <p style={{ fontSize: 13, color: "#FBBF24" }}>{err}</p>
         )}
 
-        {/* READER: ketuk layar = toggle auto scroll */}
         {reader && (
           <div>
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 8,
                 gap: 8,
+                marginBottom: 8,
+                alignItems: "center",
               }}
             >
-              <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0, flex: 1 }}>
+              <h2 style={{ fontSize: 14, fontWeight: 700, margin: 0, flex: 1 }}>
                 {reader.title}
               </h2>
               <button
@@ -580,31 +612,67 @@ export default function BacaKomikPage() {
                   color: "#fff",
                   fontSize: 11,
                   fontWeight: 700,
-                  whiteSpace: "nowrap",
                 }}
               >
-                {autoOn ? "⏸ Stop scroll" : "▶ Auto scroll"}
+                {autoOn ? "⏸ Stop" : "▶ Auto"}
               </button>
             </div>
-            <p style={{ fontSize: 11, color: "#86EFAC", marginBottom: 8 }}>
-              ✓ Sudah dibaca · ketuk gambar = {autoOn ? "stop" : "mulai"} auto
-              scroll
+            <p style={{ fontSize: 11, color: "#9C90AC", marginBottom: 8 }}>
+              {reader.pages.length} halaman · ketuk gambar = auto scroll
             </p>
             <div
-              onClick={toggleAutoScroll}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") toggleAutoScroll();
-              }}
-              style={{ cursor: "pointer" }}
+              style={{ display: "flex", gap: 8, marginBottom: 12 }}
             >
+              <button
+                type="button"
+                disabled={!detail || reader.chapterIndex <= 0}
+                onClick={() => goChapter(-1)}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#1C1226",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  opacity: reader.chapterIndex <= 0 ? 0.4 : 1,
+                }}
+              >
+                ← Chapter sebelumnya
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !detail ||
+                  reader.chapterIndex >= (detail?.chapters.length || 1) - 1
+                }
+                onClick={() => goChapter(1)}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#1C1226",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: 12,
+                  opacity:
+                    reader.chapterIndex >= (detail?.chapters.length || 1) - 1
+                      ? 0.4
+                      : 1,
+                }}
+              >
+                Chapter berikutnya →
+              </button>
+            </div>
+            <div onClick={toggleAutoScroll} style={{ cursor: "pointer" }}>
               {reader.pages.map((src, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={i}
                   src={src}
-                  alt=""
+                  alt={"Hal " + (i + 1)}
                   loading="lazy"
                   draggable={false}
                   style={{
@@ -616,25 +684,50 @@ export default function BacaKomikPage() {
                 />
               ))}
             </div>
-            {autoOn && (
-              <div
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button
+                type="button"
+                disabled={!detail || reader.chapterIndex <= 0}
+                onClick={() => goChapter(-1)}
                 style={{
-                  position: "fixed",
-                  bottom: 16,
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  background: "rgba(34,197,94,0.9)",
+                  flex: 1,
+                  padding: 12,
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#A855F7",
                   color: "#fff",
-                  padding: "8px 14px",
-                  borderRadius: 20,
-                  fontSize: 12,
                   fontWeight: 700,
-                  zIndex: 50,
+                  fontSize: 13,
+                  opacity: reader.chapterIndex <= 0 ? 0.4 : 1,
                 }}
               >
-                Auto scroll aktif · ketuk layar untuk stop
-              </div>
-            )}
+                ← Prev
+              </button>
+              <button
+                type="button"
+                disabled={
+                  !detail ||
+                  reader.chapterIndex >= (detail?.chapters.length || 1) - 1
+                }
+                onClick={() => goChapter(1)}
+                style={{
+                  flex: 1,
+                  padding: 12,
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#A855F7",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  opacity:
+                    reader.chapterIndex >= (detail?.chapters.length || 1) - 1
+                      ? 0.4
+                      : 1,
+                }}
+              >
+                Next →
+              </button>
+            </div>
           </div>
         )}
 
@@ -651,7 +744,6 @@ export default function BacaKomikPage() {
                     height: 120,
                     objectFit: "cover",
                     borderRadius: 8,
-                    flexShrink: 0,
                     background: "#2a1f35",
                   }}
                 />
@@ -665,7 +757,6 @@ export default function BacaKomikPage() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    flexShrink: 0,
                   }}
                 >
                   📖
@@ -674,8 +765,40 @@ export default function BacaKomikPage() {
               <div style={{ flex: 1 }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700 }}>{detail.title}</h2>
                 <p style={{ fontSize: 12, color: "#9C90AC", marginTop: 4 }}>
-                  {detail.chapters.length} chapter
+                  {detail.chapters.length} chapter (lengkap)
                 </p>
+                <div
+                  style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}
+                >
+                  {detail.colorLabel && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: "2px 6px",
+                        borderRadius: 6,
+                        background: "rgba(148,163,184,0.2)",
+                        color: "#94A3B8",
+                      }}
+                    >
+                      {detail.colorLabel}
+                    </span>
+                  )}
+                  {detail.statusLabel && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: "2px 6px",
+                        borderRadius: 6,
+                        background: "rgba(168,85,247,0.2)",
+                        color: "#D8B4FE",
+                      }}
+                    >
+                      {detail.statusLabel}
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() =>
@@ -699,24 +822,19 @@ export default function BacaKomikPage() {
                     fontWeight: 700,
                   }}
                 >
-                  {isFav(detail.mangaId)
-                    ? "⭐ Favorit · ketuk lepas"
-                    : "☆ Tambah favorit"}
+                  {isFav(detail.mangaId) ? "⭐ Favorit" : "☆ Favorit"}
                 </button>
               </div>
             </div>
-            <p style={{ fontSize: 11, color: "#6B6178", marginBottom: 8 }}>
-              Abu-abu = sudah dibaca · Ungu = belum
-            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {detail.chapters.map((c) => {
+              {detail.chapters.map((c, idx) => {
                 const cid = c.id || c.url;
                 const read = isRead(cid, history);
                 return (
                   <button
                     key={cid}
                     type="button"
-                    onClick={() => openRead(c)}
+                    onClick={() => openRead(c, idx)}
                     style={{
                       textAlign: "left",
                       padding: "10px 12px",
@@ -745,8 +863,8 @@ export default function BacaKomikPage() {
         {!detail && !reader && (
           <>
             {tab === "fav" && favorites.length === 0 && (
-              <p style={{ fontSize: 13, color: "#9C90AC", marginTop: 8 }}>
-                Belum ada favorit. Ketuk ☆ di cover untuk menyimpan.
+              <p style={{ fontSize: 13, color: "#9C90AC" }}>
+                Belum ada favorit. Ketuk ☆ di cover.
               </p>
             )}
             <div
