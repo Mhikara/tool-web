@@ -5,8 +5,11 @@ export const maxDuration = 30;
 
 const MD = "https://api.mangadex.org";
 
-function coverUrl(mangaId: string, fileName: string | null) {
-  if (!fileName) return null;
+function coverUrl(mangaId: string, fileName: string | null | undefined) {
+  if (!mangaId || !fileName || fileName === "null" || fileName === "undefined") {
+    return null;
+  }
+  // format resmi MangaDex (ukuran 256 biar cepat)
   return `https://uploads.mangadex.org/covers/\( {mangaId}/ \){fileName}.256.jpg`;
 }
 
@@ -16,9 +19,26 @@ function titleOf(manga: any) {
     t.id ||
     t.en ||
     t.ja ||
+    t["ja-ro"] ||
     Object.values(t)[0] ||
     "Tanpa judul"
   );
+}
+
+function pickCover(manga: any): string | null {
+  const rels = manga?.relationships || [];
+  const cover = rels.find((r: any) => r.type === "cover_art");
+  const fileName = cover?.attributes?.fileName;
+  return coverUrl(manga.id, fileName);
+}
+
+function mapManga(m: any) {
+  return {
+    id: m.id,
+    title: String(titleOf(m)),
+    url: m.id,
+    cover: pickCover(m),
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -30,35 +50,33 @@ export async function GET(req: NextRequest) {
     const chapterId = sp.get("chapterId") || "";
 
     if (action === "home") {
-      const url =
-        MD +
-        "/manga?limit=24&order[latestUploadedChapter]=desc&availableTranslatedLanguage[]=id&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica";
-      const res = await fetch(url, {
-        headers: { Accept: "application/json" },
-        next: { revalidate: 300 },
+      const url = new URL(MD + "/manga");
+      url.searchParams.set("limit", "24");
+      url.searchParams.set("order[latestUploadedChapter]", "desc");
+      url.searchParams.append("availableTranslatedLanguage[]", "id");
+      url.searchParams.append("includes[]", "cover_art");
+      url.searchParams.append("contentRating[]", "safe");
+      url.searchParams.append("contentRating[]", "suggestive");
+      url.searchParams.append("contentRating[]", "erotica");
+
+      const res = await fetch(url.toString(), {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "tool-web-komik/1.0",
+        },
+        next: { revalidate: 120 },
       });
       if (!res.ok) {
         return NextResponse.json(
-          { error: "Gagal memuat daftar MangaDex", list: [] },
+          { error: "Gagal memuat daftar", list: [] },
           { status: 502 }
         );
       }
       const json = await res.json();
-      const list = (json.data || []).map((m: any) => {
-        const rel = (m.relationships || []).find(
-          (r: any) => r.type === "cover_art"
-        );
-        const file = rel?.attributes?.fileName || null;
-        return {
-          id: m.id,
-          title: titleOf(m),
-          url: m.id,
-          cover: coverUrl(m.id, file),
-        };
-      });
+      const list = (json.data || []).map(mapManga);
       return NextResponse.json({
         source: "MangaDex",
-        note: "ManhwaDesu diblokir Cloudflare dari Vercel. Pakai MangaDex (ID).",
+        note: "Cover dari MangaDex CDN",
         list,
       });
     }
@@ -67,25 +85,26 @@ export async function GET(req: NextRequest) {
       if (!q.trim()) {
         return NextResponse.json({ error: "Query kosong", list: [] }, { status: 400 });
       }
-      const url =
-        MD +
-        "/manga?limit=24&title=" +
-        encodeURIComponent(q.trim()) +
-        "&availableTranslatedLanguage[]=id&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica";
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
-      const json = await res.json();
-      const list = (json.data || []).map((m: any) => {
-        const rel = (m.relationships || []).find(
-          (r: any) => r.type === "cover_art"
-        );
-        return {
-          id: m.id,
-          title: titleOf(m),
-          url: m.id,
-          cover: coverUrl(m.id, rel?.attributes?.fileName || null),
-        };
+      const url = new URL(MD + "/manga");
+      url.searchParams.set("limit", "24");
+      url.searchParams.set("title", q.trim());
+      url.searchParams.append("availableTranslatedLanguage[]", "id");
+      url.searchParams.append("includes[]", "cover_art");
+      url.searchParams.append("contentRating[]", "safe");
+      url.searchParams.append("contentRating[]", "suggestive");
+      url.searchParams.append("contentRating[]", "erotica");
+
+      const res = await fetch(url.toString(), {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "tool-web-komik/1.0",
+        },
       });
-      return NextResponse.json({ source: "MangaDex", list });
+      const json = await res.json();
+      return NextResponse.json({
+        source: "MangaDex",
+        list: (json.data || []).map(mapManga),
+      });
     }
 
     if (action === "detail") {
@@ -93,18 +112,27 @@ export async function GET(req: NextRequest) {
       if (!mangaId) {
         return NextResponse.json({ error: "id wajib" }, { status: 400 });
       }
+
+      const infoUrl = new URL(MD + "/manga/" + mangaId);
+      infoUrl.searchParams.append("includes[]", "cover_art");
+
+      const feedUrl = new URL(MD + "/manga/" + mangaId + "/feed");
+      feedUrl.searchParams.set("limit", "100");
+      feedUrl.searchParams.append("translatedLanguage[]", "id");
+      feedUrl.searchParams.set("order[chapter]", "desc");
+      feedUrl.searchParams.append("contentRating[]", "safe");
+      feedUrl.searchParams.append("contentRating[]", "suggestive");
+      feedUrl.searchParams.append("contentRating[]", "erotica");
+
       const [infoRes, feedRes] = await Promise.all([
-        fetch(MD + "/manga/" + mangaId + "?includes[]=cover_art", {
-          headers: { Accept: "application/json" },
+        fetch(infoUrl.toString(), {
+          headers: { Accept: "application/json", "User-Agent": "tool-web-komik/1.0" },
         }),
-        fetch(
-          MD +
-            "/manga/" +
-            mangaId +
-            "/feed?limit=100&translatedLanguage[]=id&order[chapter]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica",
-          { headers: { Accept: "application/json" } }
-        ),
+        fetch(feedUrl.toString(), {
+          headers: { Accept: "application/json", "User-Agent": "tool-web-komik/1.0" },
+        }),
       ]);
+
       if (!infoRes.ok) {
         return NextResponse.json({ error: "Judul tidak ditemukan" }, { status: 404 });
       }
@@ -119,8 +147,10 @@ export async function GET(req: NextRequest) {
           (c.attributes.title ? " — " + c.attributes.title : ""),
         url: c.id,
       }));
+
       return NextResponse.json({
         title: titleOf(info.data),
+        cover: pickCover(info.data),
         chapters,
       });
     }
@@ -131,7 +161,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "chapterId wajib" }, { status: 400 });
       }
       const res = await fetch(MD + "/at-home/server/" + ch, {
-        headers: { Accept: "application/json" },
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "tool-web-komik/1.0",
+        },
       });
       if (!res.ok) {
         return NextResponse.json(
@@ -143,13 +176,8 @@ export async function GET(req: NextRequest) {
       const base = json.baseUrl;
       const hash = json.chapter?.hash;
       const files: string[] = json.chapter?.data || json.chapter?.dataSaver || [];
-      const pages = files.map(
-        (f: string) => base + "/data/" + hash + "/" + f
-      );
-      return NextResponse.json({
-        title: "Chapter",
-        pages,
-      });
+      const pages = files.map((f: string) => `\( {base}/data/ \){hash}/${f}`);
+      return NextResponse.json({ title: "Chapter", pages });
     }
 
     return NextResponse.json({ error: "action tidak dikenal" }, { status: 400 });
