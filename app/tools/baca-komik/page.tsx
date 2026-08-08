@@ -17,6 +17,7 @@ type Chapter = {
 };
 
 const HISTORY_KEY = "komik_read_history_v1";
+const FAV_KEY = "komik_favorites_v1";
 
 function loadHistory(): Record<string, number> {
   if (typeof window === "undefined") return {};
@@ -37,13 +38,28 @@ function isRead(chapterId: string, history: Record<string, number>) {
   return Boolean(history[chapterId]);
 }
 
+function loadFavorites(): Item[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(FAV_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveFavorites(list: Item[]) {
+  localStorage.setItem(FAV_KEY, JSON.stringify(list));
+}
+
 export default function BacaKomikPage() {
   const [q, setQ] = useState("");
   const [list, setList] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
+  const [tab, setTab] = useState<"home" | "fav">("home");
   const [history, setHistory] = useState<Record<string, number>>({});
+  const [favorites, setFavorites] = useState<Item[]>([]);
   const [detail, setDetail] = useState<{
     title: string;
     chapters: Chapter[];
@@ -58,6 +74,7 @@ export default function BacaKomikPage() {
 
   useEffect(() => {
     setHistory(loadHistory());
+    setFavorites(loadFavorites());
   }, []);
 
   const loadHome = useCallback(async () => {
@@ -88,6 +105,7 @@ export default function BacaKomikPage() {
     setErr("");
     setDetail(null);
     setReader(null);
+    setTab("home");
     try {
       const res = await fetch(
         "/api/komik?action=search&q=" + encodeURIComponent(q.trim())
@@ -100,6 +118,29 @@ export default function BacaKomikPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const isFav = (id: string) =>
+    favorites.some((f) => (f.id || f.url) === id);
+
+  const toggleFav = (item: Item) => {
+    const id = item.id || item.url;
+    let next: Item[];
+    if (isFav(id)) {
+      next = favorites.filter((f) => (f.id || f.url) !== id);
+    } else {
+      next = [
+        {
+          id: item.id || item.url,
+          title: item.title,
+          url: item.url,
+          cover: item.cover,
+        },
+        ...favorites.filter((f) => (f.id || f.url) !== id),
+      ];
+    }
+    setFavorites(next);
+    saveFavorites(next);
   };
 
   const openDetail = async (item: Item) => {
@@ -157,6 +198,107 @@ export default function BacaKomikPage() {
     setHistory({});
   };
 
+  const displayList = tab === "fav" ? favorites : list;
+
+  const card = (item: Item) => {
+    const id = item.id || item.url;
+    const fav = isFav(id);
+    return (
+      <div
+        key={id}
+        style={{
+          borderRadius: 12,
+          border: "1px solid rgba(255,255,255,0.08)",
+          background: "#16101c",
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFav(item);
+          }}
+          style={{
+            position: "absolute",
+            top: 6,
+            right: 6,
+            zIndex: 2,
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            border: "none",
+            background: "rgba(0,0,0,0.55)",
+            fontSize: 16,
+            cursor: "pointer",
+          }}
+          aria-label="Favorit"
+        >
+          {fav ? "⭐" : "☆"}
+        </button>
+        <button
+          type="button"
+          onClick={() => openDetail(item)}
+          style={{
+            textAlign: "left",
+            padding: 0,
+            border: "none",
+            background: "transparent",
+            color: "#F3EEFA",
+            width: "100%",
+            cursor: "pointer",
+          }}
+        >
+          {item.cover ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={item.cover}
+              alt=""
+              style={{
+                width: "100%",
+                aspectRatio: "3/4",
+                objectFit: "cover",
+                display: "block",
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                aspectRatio: "3/4",
+                background: "#2a1f35",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 28,
+              }}
+            >
+              📖
+            </div>
+          )}
+          <div style={{ padding: "8px 10px 10px" }}>
+            <div
+              style={{
+                fontSize: 12.5,
+                fontWeight: 700,
+                lineHeight: 1.35,
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
+              {item.title}
+            </div>
+            <div style={{ fontSize: 11, color: "#A78BFA", marginTop: 4 }}>
+              Lihat chapter →
+            </div>
+          </div>
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div
       style={{
@@ -181,7 +323,7 @@ export default function BacaKomikPage() {
             ← Beranda
           </Link>
           <div style={{ display: "flex", gap: 6 }}>
-            {Object.keys(history).length > 0 && !reader && (
+            {Object.keys(history).length > 0 && !reader && !detail && (
               <button
                 type="button"
                 onClick={clearHistory}
@@ -203,7 +345,6 @@ export default function BacaKomikPage() {
                 if (reader) setReader(null);
                 else if (detail) {
                   setDetail(null);
-                  loadHome();
                 } else loadHome();
               }}
               style={{
@@ -224,56 +365,95 @@ export default function BacaKomikPage() {
         <h1 style={{ fontSize: 20, fontWeight: 700, margin: "12px 0 4px" }}>
           📖 Baca Komik
         </h1>
-        <p style={{ fontSize: 12, color: "#9C90AC", marginBottom: 8 }}>
-          List judul · riwayat chapter tersimpan di HP ini
+        <p style={{ fontSize: 12, color: "#9C90AC", marginBottom: 10 }}>
+          Favorit & riwayat tersimpan di HP ini
         </p>
-        {note && (
-          <p style={{ fontSize: 11, color: "#A78BFA", marginBottom: 12 }}>
-            {note}
-          </p>
-        )}
 
         {!detail && !reader && (
-          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && search()}
-              placeholder="Cari judul..."
+          <>
+            <div
               style={{
-                flex: 1,
-                padding: 10,
-                borderRadius: 10,
-                border: "1px solid #333",
-                background: "#1C1226",
-                color: "#fff",
-              }}
-            />
-            <button
-              type="button"
-              onClick={search}
-              style={{
-                padding: "10px 14px",
-                borderRadius: 10,
-                border: "none",
-                background: "#A855F7",
-                color: "#fff",
-                fontWeight: 700,
+                display: "flex",
+                gap: 8,
+                marginBottom: 12,
               }}
             >
-              Cari
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setTab("home")}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "none",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  background: tab === "home" ? "#A855F7" : "#1C1226",
+                  color: "#fff",
+                }}
+              >
+                Semua
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("fav")}
+                style={{
+                  flex: 1,
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "none",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  background: tab === "fav" ? "#A855F7" : "#1C1226",
+                  color: "#fff",
+                }}
+              >
+                ⭐ Favorit ({favorites.length})
+              </button>
+            </div>
+
+            {tab === "home" && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && search()}
+                  placeholder="Cari judul..."
+                  style={{
+                    flex: 1,
+                    padding: 10,
+                    borderRadius: 10,
+                    border: "1px solid #333",
+                    background: "#1C1226",
+                    color: "#fff",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={search}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 10,
+                    border: "none",
+                    background: "#A855F7",
+                    color: "#fff",
+                    fontWeight: 700,
+                  }}
+                >
+                  Cari
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {loading && (
           <p style={{ fontSize: 13, color: "#9C90AC" }}>Memuat...</p>
         )}
-        {err && !loading && (
+        {err && !loading && tab === "home" && (
           <p style={{ fontSize: 13, color: "#FBBF24" }}>{err}</p>
         )}
 
-        {/* READER */}
         {reader && (
           <div>
             <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
@@ -295,7 +475,6 @@ export default function BacaKomikPage() {
           </div>
         )}
 
-        {/* DETAIL + chapter list (warna ganti jika sudah dibaca) */}
         {!reader && detail && (
           <div>
             <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
@@ -313,16 +492,43 @@ export default function BacaKomikPage() {
                   }}
                 />
               )}
-              <div>
+              <div style={{ flex: 1 }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700 }}>{detail.title}</h2>
                 <p style={{ fontSize: 12, color: "#9C90AC", marginTop: 4 }}>
                   {detail.chapters.length} chapter
                 </p>
-                <p style={{ fontSize: 11, color: "#6B6178", marginTop: 6 }}>
-                  Abu-abu = sudah dibaca · Ungu = belum
-                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    toggleFav({
+                      id: detail.mangaId,
+                      title: detail.title,
+                      url: detail.mangaId,
+                      cover: detail.cover || null,
+                    })
+                  }
+                  style={{
+                    marginTop: 10,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #A855F7",
+                    background: isFav(detail.mangaId)
+                      ? "rgba(168,85,247,0.25)"
+                      : "transparent",
+                    color: "#E9D5FF",
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  {isFav(detail.mangaId)
+                    ? "⭐ Favorit · ketuk lepas"
+                    : "☆ Tambah favorit"}
+                </button>
               </div>
             </div>
+            <p style={{ fontSize: 11, color: "#6B6178", marginBottom: 8 }}>
+              Abu-abu = sudah dibaca · Ungu = belum
+            </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {detail.chapters.map((c) => {
                 const cid = c.id || c.url;
@@ -344,7 +550,6 @@ export default function BacaKomikPage() {
                       fontSize: 13,
                       display: "flex",
                       justifyContent: "space-between",
-                      alignItems: "center",
                     }}
                   >
                     <span>{c.title}</span>
@@ -358,83 +563,23 @@ export default function BacaKomikPage() {
           </div>
         )}
 
-        {/* LIST seperti grid manhwadesu: cover + judul */}
         {!detail && !reader && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-            }}
-          >
-            {list.map((item) => (
-              <button
-                key={item.url}
-                type="button"
-                onClick={() => openDetail(item)}
-                style={{
-                  textAlign: "left",
-                  padding: 0,
-                  borderRadius: 12,
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  background: "#16101c",
-                  color: "#F3EEFA",
-                  overflow: "hidden",
-                }}
-              >
-                {item.cover ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.cover}
-                    alt=""
-                    style={{
-                      width: "100%",
-                      aspectRatio: "3/4",
-                      objectFit: "cover",
-                      display: "block",
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      aspectRatio: "3/4",
-                      background: "#2a1f35",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 28,
-                    }}
-                  >
-                    📖
-                  </div>
-                )}
-                <div style={{ padding: "8px 10px 10px" }}>
-                  <div
-                    style={{
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                      lineHeight: 1.35,
-                      display: "-webkit-box",
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: "vertical",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {item.title}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: "#A78BFA",
-                      marginTop: 4,
-                    }}
-                  >
-                    Lihat chapter →
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
+          <>
+            {tab === "fav" && favorites.length === 0 && (
+              <p style={{ fontSize: 13, color: "#9C90AC", marginTop: 8 }}>
+                Belum ada favorit. Ketuk ☆ di cover untuk menyimpan.
+              </p>
+            )}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 12,
+              }}
+            >
+              {displayList.map((item) => card(item))}
+            </div>
+          </>
         )}
       </div>
     </div>
