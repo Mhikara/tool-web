@@ -17,9 +17,15 @@ interface Chapter {
   title: string | null;
 }
 
+const LANG_LABEL: Record<string, string> = {
+  en: "Bahasa Inggris",
+  id: "Bahasa Indonesia",
+};
+
 export default function MangaDetailPage({ params }: { params: { id: string } }) {
   const [manga, setManga] = useState<Manga | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [chapterLanguage, setChapterLanguage] = useState<string>("en");
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
 
@@ -29,6 +35,7 @@ export default function MangaDetailPage({ params }: { params: { id: string } }) 
       .then((data) => {
         setManga(data.manga);
         setChapters(data.chapters || []);
+        setChapterLanguage(data.chapterLanguage || "en");
         setLoading(false);
       });
   }, [params.id]);
@@ -64,10 +71,7 @@ export default function MangaDetailPage({ params }: { params: { id: string } }) 
           <p className="text-xs text-gray-400 mt-1">{manga.status}</p>
           <div className="flex flex-wrap gap-1 mt-2">
             {manga.tags.slice(0, 5).map((t) => (
-              <span
-                key={t}
-                className="text-xs bg-gray-100 px-2 py-0.5 rounded"
-              >
+              <span key={t} className="text-xs bg-gray-100 px-2 py-0.5 rounded">
                 {t}
               </span>
             ))}
@@ -86,10 +90,20 @@ export default function MangaDetailPage({ params }: { params: { id: string } }) 
         {manga.description || "Tidak ada deskripsi."}
       </p>
 
-      <h2 className="font-semibold mt-6 mb-2">Daftar Chapter</h2>
+      <div className="flex items-center justify-between mt-6 mb-2">
+        <h2 className="font-semibold">Daftar Chapter</h2>
+        {chapters.length > 0 && (
+          <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+            {LANG_LABEL[chapterLanguage] || chapterLanguage}
+          </span>
+        )}
+      </div>
+
       <div className="space-y-1 max-h-96 overflow-y-auto">
         {chapters.length === 0 && (
-          <p className="text-sm text-gray-500">Belum ada chapter (bahasa Inggris).</p>
+          <p className="text-sm text-gray-500">
+            Belum ada chapter tersedia (dicoba bahasa Inggris & Indonesia).
+          </p>
         )}
         {chapters.map((c) => (
           <Link

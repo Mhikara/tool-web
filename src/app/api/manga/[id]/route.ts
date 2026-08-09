@@ -10,8 +10,8 @@ export async function GET(
     if (!manga) {
       return NextResponse.json({ error: "Manga tidak ditemukan" }, { status: 404 });
     }
-    const chapters = await getChapters(params.id);
-    return NextResponse.json({ manga, chapters });
+    const { chapters, language } = await getChapters(params.id, "en");
+    return NextResponse.json({ manga, chapters, chapterLanguage: language });
   } catch (err) {
     console.error("[manga/detail]", err);
     return NextResponse.json({ error: "Gagal mengambil detail" }, { status: 500 });

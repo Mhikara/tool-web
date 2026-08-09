@@ -116,7 +116,7 @@ export async function getMangaDetail(id: string): Promise<MangaResult | null> {
   return mapMangaItem(json.data);
 }
 
-export async function getChapters(mangaId: string, lang = "en"): Promise<ChapterResult[]> {
+async function fetchChaptersByLang(mangaId: string, lang: string): Promise<ChapterResult[]> {
   const params = new URLSearchParams({
     manga: mangaId,
     "translatedLanguage[]": lang,
@@ -138,6 +138,21 @@ export async function getChapters(mangaId: string, lang = "en"): Promise<Chapter
     language: item.attributes.translatedLanguage,
     publishedAt: item.attributes.publishAt,
   }));
+}
+
+// Coba bahasa Inggris dulu, kalau kosong fallback ke Indonesia
+export async function getChapters(
+  mangaId: string,
+  preferredLang = "en"
+): Promise<{ chapters: ChapterResult[]; language: string }> {
+  const primary = await fetchChaptersByLang(mangaId, preferredLang);
+  if (primary.length > 0) {
+    return { chapters: primary, language: preferredLang };
+  }
+
+  const fallbackLang = preferredLang === "en" ? "id" : "en";
+  const fallback = await fetchChaptersByLang(mangaId, fallbackLang);
+  return { chapters: fallback, language: fallback.length > 0 ? fallbackLang : preferredLang };
 }
 
 export async function getChapterPages(chapterId: string): Promise<string[]> {
@@ -169,7 +184,7 @@ export async function getAdjacentChapters(
   const info = await getChapterInfo(chapterId);
   if (!info || !info.mangaId) return { prevId: null, nextId: null, mangaId: null };
 
-  const chapters = await getChapters(info.mangaId, info.language);
+  const { chapters } = await getChapters(info.mangaId, info.language);
   const index = chapters.findIndex((c) => c.id === chapterId);
   if (index === -1) return { prevId: null, nextId: null, mangaId: info.mangaId };
 
