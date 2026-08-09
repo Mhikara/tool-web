@@ -166,6 +166,32 @@ async function fmFetch(url: string, cookie?: string) {
   return { ok: res.ok, status: res.status, text, cookie: cookieOut };
 }
 
+
+async function fmFetch(url: string, cookie?: string) {
+  const headers: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    Accept: "text/html,application/xhtml+xml,application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+    Referer: FM + "/",
+  };
+  if (cookie) headers.Cookie = cookie;
+  const res = await fetch(url, { headers, redirect: "follow" });
+  const setCookie = res.headers.getSetCookie?.() || [];
+  let cookieOut = cookie || "";
+  if (setCookie.length) {
+    cookieOut = setCookie
+      .map((c: string) => c.split(";")[0])
+      .concat(cookieOut ? [cookieOut] : [])
+      .join("; ");
+  } else {
+    const sc = res.headers.get("set-cookie");
+    if (sc) cookieOut = sc.split(",")[0].split(";")[0] + (cookieOut ? "; " + cookieOut : "");
+  }
+  const text = await res.text();
+  return { ok: res.ok, status: res.status, text, cookie: cookieOut };
+}
+
 async function fmList() {
   try {
     const got = await fmFetch(FM + "/latest");
