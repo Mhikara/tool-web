@@ -12,6 +12,8 @@ type Item = {
   colorLabel?: string;
   status?: string;
   statusLabel?: string;
+  source?: string;
+  external?: string;
 };
 
 type Chapter = {
@@ -20,6 +22,7 @@ type Chapter = {
   url: string;
   number?: string;
   index?: number;
+  paid?: boolean;
 };
 
 const HISTORY_KEY = "komik_read_history_v1";
@@ -33,14 +36,17 @@ function loadHistory(): Record<string, number> {
     return {};
   }
 }
+
 function markRead(chapterId: string) {
   const h = loadHistory();
   h[chapterId] = Date.now();
   localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
 }
+
 function isRead(chapterId: string, history: Record<string, number>) {
   return Boolean(history[chapterId]);
 }
+
 function loadFavorites(): Item[] {
   if (typeof window === "undefined") return [];
   try {
@@ -49,14 +55,16 @@ function loadFavorites(): Item[] {
     return [];
   }
 }
+
 function saveFavorites(list: Item[]) {
   localStorage.setItem(FAV_KEY, JSON.stringify(list));
 }
 
+type SourceFilter = "all" | "mangadex" | "omega" | "fullmanhwa";
+
 export default function BacaKomikPage() {
   const [q, setQ] = useState("");
-  const [genres, setGenres] = useState<{ id: string; name: string }[]>([]);
-  const [genreId, setGenreId] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [latest, setLatest] = useState<Item[]>([]);
   const [popular, setPopular] = useState<Item[]>([]);
   const [topRated, setTopRated] = useState<Item[]>([]);
@@ -74,6 +82,8 @@ export default function BacaKomikPage() {
     cover?: string | null;
     colorLabel?: string;
     statusLabel?: string;
+    external?: string;
+    note?: string;
   } | null>(null);
   const [reader, setReader] = useState<{
     title: string;
@@ -120,7 +130,10 @@ export default function BacaKomikPage() {
     else startAutoScroll();
   };
 
-  useEffect(() => () => stopAutoScroll(), [stopAutoScroll]);
+  useEffect(() => {
+    return () => stopAutoScroll();
+  }, [stopAutoScroll]);
+
   useEffect(() => {
     if (!reader) stopAutoScroll();
   }, [reader, stopAutoScroll]);
@@ -130,7 +143,9 @@ export default function BacaKomikPage() {
     setErr("");
     setSearchList(null);
     try {
-      const res = await fetch("/api/komik?action=home");
+      const res = await fetch(
+        "/api/komik?action=home&source=" + encodeURIComponent(sourceFilter)
+      );
       const data = await res.json();
       setLatest(data.latest || data.list || []);
       setPopular(data.popular || []);
@@ -143,18 +158,11 @@ export default function BacaKomikPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sourceFilter]);
 
   useEffect(() => {
     loadHome();
   }, [loadHome]);
-
-  useEffect(() => {
-    fetch("/api/komik?action=genres")
-      .then((r) => r.json())
-      .then((d) => setGenres(d.genres || []))
-      .catch(() => {});
-  }, []);
 
   const goBack = () => {
     stopAutoScroll();
@@ -168,9 +176,8 @@ export default function BacaKomikPage() {
     }
   };
 
-  const search = async (overrideGenre?: string) => {
-    const g = overrideGenre !== undefined ? overrideGenre : genreId;
-    if (!q.trim() && !g) {
+  const search = async () => {
+    if (!q.trim()) {
       setSearchList(null);
       return loadHome();
     }
@@ -180,10 +187,12 @@ export default function BacaKomikPage() {
     setReader(null);
     setTab("home");
     try {
-      let api =
-        "/api/komik?action=search&q=" + encodeURIComponent(q.trim());
-      if (g) api += "&genre=" + encodeURIComponent(g);
-      const res = await fetch(api);
+      const res = await fetch(
+        "/api/komik?action=search&q=" +
+          encodeURIComponent(q.trim()) +
+          "&source=" +
+          encodeURIComponent(sourceFilter)
+      );
       const data = await res.json();
       setSearchList(data.list || []);
       if (!data.list?.length) setErr("Tidak ketemu");
@@ -212,6 +221,7 @@ export default function BacaKomikPage() {
           colored: item.colored,
           colorLabel: item.colorLabel,
           statusLabel: item.statusLabel,
+          source: item.source,
         },
         ...favorites.filter((f) => (f.id || f.url) !== id),
       ];
@@ -234,10 +244,12 @@ export default function BacaKomikPage() {
       setDetail({
         title: data.title,
         chapters: data.chapters || [],
-        mangaId,
+        mangaId: mangaId,
         cover: item.cover || data.cover || null,
         colorLabel: data.colorLabel || item.colorLabel,
         statusLabel: data.statusLabel || item.statusLabel,
+        external: data.external,
+        note: data.note,
       });
       setHistory(loadHistory());
     } catch (e: any) {
@@ -264,7 +276,7 @@ export default function BacaKomikPage() {
       setReader({
         title: ch.title || data.title,
         pages: data.pages || [],
-        chapterId,
+        chapterId: chapterId,
         chapterIndex: idx,
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -292,6 +304,13 @@ export default function BacaKomikPage() {
           : homeTab === "rating"
             ? topRated
             : latest;
+
+  const sourceLabel = (s?: string) => {
+    if (s === "omega") return "Omega";
+    if (s === "fullmanhwa") return "FullManhwa";
+    if (s === "mangadex") return "MangaDex";
+    return s || "";
+  };
 
   const card = (item: Item) => {
     const id = item.id || item.url;
@@ -384,6 +403,20 @@ export default function BacaKomikPage() {
             <div
               style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}
             >
+              {item.source && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: "2px 6px",
+                    borderRadius: 6,
+                    background: "rgba(56,189,248,0.2)",
+                    color: "#7DD3FC",
+                  }}
+                >
+                  {sourceLabel(item.source)}
+                </span>
+              )}
               <span
                 style={{
                   fontSize: 10,
@@ -483,8 +516,45 @@ export default function BacaKomikPage() {
           📖 Baca Komik
         </h1>
         <p style={{ fontSize: 12, color: "#9C90AC", marginBottom: 10 }}>
-          Chapter lengkap · Terbaru · Terpopuler · Rating
+          Campuran sumber · Chapter lengkap
         </p>
+
+        {!detail && !reader && (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              marginBottom: 10,
+            }}
+          >
+            {(
+              [
+                ["all", "Semua sumber"],
+                ["omega", "Omega 18+"],
+                ["fullmanhwa", "FullManhwa"],
+                ["mangadex", "MangaDex ID"],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setSourceFilter(k)}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: 16,
+                  border: "none",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  background: sourceFilter === k ? "#A855F7" : "#1C1226",
+                  color: "#fff",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!detail && !reader && (
           <>
@@ -586,63 +656,6 @@ export default function BacaKomikPage() {
                     Cari
                   </button>
                 </div>
-
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, color: "#9C90AC", marginBottom: 6 }}>
-                    Genre
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 6,
-                      maxHeight: 120,
-                      overflowY: "auto",
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGenreId("");
-                        setSearchList(null);
-                        loadHome();
-                      }}
-                      style={{
-                        padding: "5px 10px",
-                        borderRadius: 16,
-                        border: "none",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        background: !genreId ? "#A855F7" : "#1C1226",
-                        color: "#fff",
-                      }}
-                    >
-                      Semua
-                    </button>
-                    {genres.map((g) => (
-                      <button
-                        key={g.id}
-                        type="button"
-                        onClick={() => {
-                          setGenreId(g.id);
-                          search(g.id);
-                        }}
-                        style={{
-                          padding: "5px 10px",
-                          borderRadius: 16,
-                          border: "none",
-                          fontSize: 11,
-                          fontWeight: 600,
-                          background: genreId === g.id ? "#7C3AED" : "#1C1226",
-                          color: "#fff",
-                        }}
-                      >
-                        {g.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
               </>
             )}
           </>
@@ -688,9 +701,7 @@ export default function BacaKomikPage() {
             <p style={{ fontSize: 11, color: "#9C90AC", marginBottom: 8 }}>
               {reader.pages.length} halaman · ketuk gambar = auto scroll
             </p>
-            <div
-              style={{ display: "flex", gap: 8, marginBottom: 12 }}
-            >
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <button
                 type="button"
                 disabled={!detail || reader.chapterIndex <= 0}
@@ -707,7 +718,7 @@ export default function BacaKomikPage() {
                   opacity: reader.chapterIndex <= 0 ? 0.4 : 1,
                 }}
               >
-                ← Chapter sebelumnya
+                ← Prev
               </button>
               <button
                 type="button"
@@ -731,7 +742,7 @@ export default function BacaKomikPage() {
                       : 1,
                 }}
               >
-                Chapter berikutnya →
+                Next →
               </button>
             </div>
             <div onClick={toggleAutoScroll} style={{ cursor: "pointer" }}>
@@ -751,50 +762,6 @@ export default function BacaKomikPage() {
                   }}
                 />
               ))}
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              <button
-                type="button"
-                disabled={!detail || reader.chapterIndex <= 0}
-                onClick={() => goChapter(-1)}
-                style={{
-                  flex: 1,
-                  padding: 12,
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#A855F7",
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  opacity: reader.chapterIndex <= 0 ? 0.4 : 1,
-                }}
-              >
-                ← Prev
-              </button>
-              <button
-                type="button"
-                disabled={
-                  !detail ||
-                  reader.chapterIndex >= (detail?.chapters.length || 1) - 1
-                }
-                onClick={() => goChapter(1)}
-                style={{
-                  flex: 1,
-                  padding: 12,
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#A855F7",
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  opacity:
-                    reader.chapterIndex >= (detail?.chapters.length || 1) - 1
-                      ? 0.4
-                      : 1,
-                }}
-              >
-                Next →
-              </button>
             </div>
           </div>
         )}
@@ -833,40 +800,28 @@ export default function BacaKomikPage() {
               <div style={{ flex: 1 }}>
                 <h2 style={{ fontSize: 16, fontWeight: 700 }}>{detail.title}</h2>
                 <p style={{ fontSize: 12, color: "#9C90AC", marginTop: 4 }}>
-                  {detail.chapters.length} chapter (lengkap)
+                  {detail.chapters.length} chapter
                 </p>
-                <div
-                  style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}
-                >
-                  {detail.colorLabel && (
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: "2px 6px",
-                        borderRadius: 6,
-                        background: "rgba(148,163,184,0.2)",
-                        color: "#94A3B8",
-                      }}
-                    >
-                      {detail.colorLabel}
-                    </span>
-                  )}
-                  {detail.statusLabel && (
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: "2px 6px",
-                        borderRadius: 6,
-                        background: "rgba(168,85,247,0.2)",
-                        color: "#D8B4FE",
-                      }}
-                    >
-                      {detail.statusLabel}
-                    </span>
-                  )}
-                </div>
+                {detail.note && (
+                  <p style={{ fontSize: 12, color: "#FBBF24", marginTop: 6 }}>
+                    {detail.note}
+                  </p>
+                )}
+                {detail.external && (
+                  <a
+                    href={detail.external}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      display: "inline-block",
+                      marginTop: 8,
+                      fontSize: 12,
+                      color: "#A78BFA",
+                    }}
+                  >
+                    Buka di situs asli →
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={() =>
@@ -917,7 +872,10 @@ export default function BacaKomikPage() {
                       justifyContent: "space-between",
                     }}
                   >
-                    <span>{c.title}</span>
+                    <span>
+                      {c.title}
+                      {c.paid ? " 🔒" : ""}
+                    </span>
                     <span style={{ fontSize: 11 }}>
                       {read ? "Dibaca" : "Baca"}
                     </span>
