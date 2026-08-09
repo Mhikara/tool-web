@@ -10,8 +10,8 @@ import {
   ChevronRight,
   RefreshCw,
 } from "lucide-react";
-import { fetchChapter, fetchDetail } from "@/lib/komik/api";
-import { pushHistory } from "@/lib/komik/storage";
+import { fetchChapter, fetchDetail } from "../../../../../lib/komik/api";
+import { pushHistory } from "../../../../../lib/komik/storage";
 
 export default function ReaderPage() {
   const params = useParams();

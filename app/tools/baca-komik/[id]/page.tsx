@@ -4,14 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowUpDown, Bookmark, BookmarkCheck, Play } from "lucide-react";
-import KomikNavbar from "@/components/komik/Navbar";
-import { fetchDetail } from "@/lib/komik/api";
+import KomikNavbar from "../../../../components/komik/Navbar";
+import { fetchDetail } from "../../../../lib/komik/api";
 import {
   isBookmarked,
   isChapterRead,
   toggleBookmark,
-} from "@/lib/komik/storage";
-import type { ChapterItem, ComicDetail } from "@/lib/komik/types";
+} from "../../../../lib/komik/storage";
+import type { ChapterItem, ComicDetail } from "../../../../lib/komik/types";
 
 export default function ComicDetailPage() {
   const params = useParams();

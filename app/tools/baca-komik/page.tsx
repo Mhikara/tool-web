@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import KomikNavbar from "@/components/komik/Navbar";
-import ComicCard from "@/components/komik/ComicCard";
-import HeroCarousel from "@/components/komik/HeroCarousel";
-import FilterBar from "@/components/komik/FilterBar";
-import { fetchHome, normalizeList, searchComics } from "@/lib/komik/api";
-import { getBookmarks, getHistory } from "@/lib/komik/storage";
-import type { ComicItem } from "@/lib/komik/types";
+import KomikNavbar from "../../../components/komik/Navbar";
+import ComicCard from "../../../components/komik/ComicCard";
+import HeroCarousel from "../../../components/komik/HeroCarousel";
+import FilterBar from "../../../components/komik/FilterBar";
+import { fetchHome, normalizeList, searchComics } from "../../../lib/komik/api";
+import { getBookmarks, getHistory } from "../../../lib/komik/storage";
+import type { ComicItem } from "../../../lib/komik/types";
 
 export default function BacaKomikCatalogPage() {
   const sp = useSearchParams();
