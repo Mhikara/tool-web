@@ -11,6 +11,12 @@ interface MangaResult {
   originalLanguage: string;
 }
 
+interface TagOption {
+  id: string;
+  name: string;
+  group: string;
+}
+
 export default function MangaDexCatalogPage() {
   const [results, setResults] = useState<MangaResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,19 +25,33 @@ export default function MangaDexCatalogPage() {
   const [favorites, setFavorites] = useState<Bookmark[]>([]);
   const [showFavorites, setShowFavorites] = useState(false);
 
+  const [allTags, setAllTags] = useState<TagOption[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [showGenrePanel, setShowGenrePanel] = useState(false);
+
   useEffect(() => {
     setFavorites(getBookmarks());
+    fetch("/api/manga/tags")
+      .then((res) => res.json())
+      .then((data) => setAllTags(data.tags || []));
   }, []);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/manga/catalog?status=${status}&sort=${sort}`)
+    const tagsQuery = selectedTags.length > 0 ? `&tags=${selectedTags.join(",")}` : "";
+    fetch(`/api/manga/catalog?status=${status}&sort=${sort}${tagsQuery}`)
       .then((res) => res.json())
       .then((data) => {
         setResults(data.results || []);
         setLoading(false);
       });
-  }, [status, sort]);
+  }, [status, sort, selectedTags]);
+
+  function toggleTag(id: string) {
+    setSelectedTags((prev) =>
+      prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -52,7 +72,7 @@ export default function MangaDexCatalogPage() {
         <FavoritesView favorites={favorites} />
       ) : (
         <>
-          <div className="flex flex-wrap gap-2 mb-6">
+          <div className="flex flex-wrap gap-2 mb-3">
             <Link
               href="/tools/baca-komik/search"
               className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-full hover:bg-blue-700"
@@ -77,14 +97,52 @@ export default function MangaDexCatalogPage() {
               value={sort}
               onChange={(v) => setSort(v as any)}
             />
+            <button
+              onClick={() => setShowGenrePanel((s) => !s)}
+              className={`text-xs px-3 py-1.5 rounded-full ${
+                selectedTags.length > 0
+                  ? "bg-purple-600 text-white"
+                  : "bg-gray-100 text-gray-600"
+              }`}
+            >
+              🏷️ Genre {selectedTags.length > 0 ? `(${selectedTags.length})` : ""}
+            </button>
           </div>
+
+          {showGenrePanel && (
+            <div className="mb-4 p-3 bg-white border rounded-lg max-h-56 overflow-y-auto">
+              <div className="flex flex-wrap gap-1.5">
+                {allTags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    onClick={() => toggleTag(tag.id)}
+                    className={`text-xs px-2.5 py-1 rounded-full border ${
+                      selectedTags.includes(tag.id)
+                        ? "bg-purple-600 text-white border-purple-600"
+                        : "bg-white text-gray-600 border-gray-200"
+                    }`}
+                  >
+                    {tag.name}
+                  </button>
+                ))}
+              </div>
+              {selectedTags.length > 0 && (
+                <button
+                  onClick={() => setSelectedTags([])}
+                  className="mt-2 text-xs text-red-500 underline"
+                >
+                  Reset genre
+                </button>
+              )}
+            </div>
+          )}
 
           <p className="text-xs text-gray-400 mb-3">{results.length} judul</p>
 
           {loading ? (
             <p className="text-sm text-gray-500">Memuat...</p>
           ) : results.length === 0 ? (
-            <p className="text-sm text-gray-500">Tidak ada hasil.</p>
+            <p className="text-sm text-gray-500">Tidak ada hasil untuk filter ini.</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {results.map((m) => (

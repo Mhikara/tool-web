@@ -67,6 +67,7 @@ export interface CatalogOptions {
   status?: "ongoing" | "completed" | "all";
   sort?: "latest" | "popular" | "rating";
   page?: number;
+  tagIds?: string[];
 }
 
 export async function getCatalog(
@@ -85,6 +86,10 @@ export async function getCatalog(
 
   if (opts.status && opts.status !== "all") {
     params.append("status[]", opts.status);
+  }
+
+  if (opts.tagIds && opts.tagIds.length > 0) {
+    opts.tagIds.forEach((id) => params.append("includedTags[]", id));
   }
 
   if (opts.sort === "latest") {
@@ -193,4 +198,27 @@ export async function getAdjacentChapters(
     nextId: index < chapters.length - 1 ? chapters[index + 1].id : null,
     mangaId: info.mangaId,
   };
+}
+
+export interface TagOption {
+  id: string;
+  name: string;
+  group: string;
+}
+
+export async function getAvailableTags(): Promise<TagOption[]> {
+  const res = await fetch(`${BASE_URL}/manga/tag`, {
+    next: { revalidate: 86400 },
+  });
+  if (!res.ok) throw new Error("Gagal mengambil daftar genre");
+  const json = await res.json();
+
+  return json.data
+    .map((item: any) => ({
+      id: item.id,
+      name: item.attributes.name.en || Object.values(item.attributes.name)[0],
+      group: item.attributes.group,
+    }))
+    .filter((t: TagOption) => t.group === "genre")
+    .sort((a: TagOption, b: TagOption) => a.name.localeCompare(b.name));
 }

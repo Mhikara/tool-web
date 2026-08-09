@@ -140,32 +140,48 @@ async function omegaSearch(q: string) {
 }
 
 /* ---------- FullManhwa (list scrape) ---------- */
+
+async function fmFetch(url: string, cookie?: string) {
+  const headers: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    Accept: "text/html,application/xhtml+xml,application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+    Referer: FM + "/",
+  };
+  if (cookie) headers.Cookie = cookie;
+  const res = await fetch(url, { headers, redirect: "follow" });
+  const setCookie = res.headers.getSetCookie?.() || [];
+  let cookieOut = cookie || "";
+  if (setCookie.length) {
+    cookieOut = setCookie
+      .map((c: string) => c.split(";")[0])
+      .concat(cookieOut ? [cookieOut] : [])
+      .join("; ");
+  } else {
+    const sc = res.headers.get("set-cookie");
+    if (sc) cookieOut = sc.split(",")[0].split(";")[0] + (cookieOut ? "; " + cookieOut : "");
+  }
+  const text = await res.text();
+  return { ok: res.ok, status: res.status, text, cookie: cookieOut };
+}
+
 async function fmList() {
   try {
-    const res = await fetch(FM + "/latest", {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Accept: "text/html",
-      },
-      next: { revalidate: 300 },
-    });
-    if (!res.ok) return [];
-    const html = await res.text();
+    const got = await fmFetch(FM + "/latest");
+    if (!got.ok) return [];
+    const html = got.text;
     const items: any[] = [];
     const seen = new Set<string>();
-    const re =
-      /href="https?:\/\/fullmanhwa\.com\/manga\/([^"]+)"[^>]*>[\s\S]*?(?:src="(https?:\/\/[^"]+)"[\s\S]*?)?([^<]{3,80})/gi;
-    // simpler: manga links + nearby
     const linkRe = /href="(?:https?:\/\/fullmanhwa\.com)?\/manga\/([a-z0-9-]+)"/gi;
     let m: RegExpExecArray | null;
     while ((m = linkRe.exec(html)) !== null) {
       const slug = m[1];
-      if (seen.has(slug)) continue;
+      if (seen.has(slug) || slug === "page") continue;
       seen.add(slug);
       const title = slug
         .replace(/-/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+        .replace(/\b\w/g, (c: string) => c.toUpperCase());
       items.push({
         id: "fm:" + slug,
         source: "fullmanhwa",
@@ -178,19 +194,110 @@ async function fmList() {
         statusLabel: "Ongoing",
         external: FM + "/manga/" + slug,
       });
-      if (items.length >= 24) break;
+      if (items.length >= 30) break;
     }
-    // try cover from og or img near
     const coverRe =
-      /(?:https?:\/\/img\.fullmanhwa\.com\/covers\/[^"'\s]+\.(?:jpg|jpeg|png|webp))/gi;
+      /https:\/\/img\.fullmanhwa\.com\/covers\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/gi;
     const covers = html.match(coverRe) || [];
-    items.forEach((it, i) => {
+    items.forEach((it: any, i: number) => {
       if (covers[i]) it.cover = covers[i];
     });
     return items;
   } catch {
     return [];
   }
+}
+
+async function fmDetail(slug: string) {
+  const got = await fmFetch(FM + "/manga/" + slug);
+  if (!got.ok) throw new Error("FullManhwa detail gagal");
+  const html = got.text;
+  const ogTitle =
+    html.match(/property=["']og:title["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    html.match(/content=["']([^"']+)["'][^>]*property=["']og:title["']/i)?.[1] ||
+    slug;
+  const title = ogTitle.replace(/\s*Manga\s*-\s*FullManhwa.*/i, "").trim();
+  const cover =
+    html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    html.match(/content=["'](https:\/\/img\.fullmanhwa\.com\/[^"']+)["']/i)?.[1] ||
+    null;
+
+  const seen = new Set<string>();
+  const chapters: any[] = [];
+  const re = new RegExp(
+    'href=["\'](?:https?:\\/\\/fullmanhwa\\.com)?\\/manga\\/' +
+      slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+      '\\/(chapter-\\d+)["\']',
+    "gi"
+  );
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const chSlug = m[1];
+    if (seen.has(chSlug)) continue;
+    seen.add(chSlug);
+    const num = chSlug.replace("chapter-", "");
+    chapters.push({
+      id: "fm:" + slug + "/" + chSlug,
+      title: "Ch. " + num,
+      url: "fm:" + slug + "/" + chSlug,
+      number: num,
+    });
+  }
+  chapters.sort((a, b) => Number(a.number) - Number(b.number));
+  chapters.forEach((c, i) => {
+    c.index = i;
+  });
+
+  return {
+    title: title,
+    cover: cover,
+    colored: true,
+    colorLabel: "Bergambar",
+    statusLabel: "Ongoing",
+    source: "fullmanhwa",
+    external: FM + "/manga/" + slug,
+    chapters: chapters,
+    totalChapters: chapters.length,
+  };
+}
+
+async function fmRead(slug: string, chSlug: string) {
+  const pageUrl = FM + "/manga/" + slug + "/" + chSlug;
+  const got = await fmFetch(pageUrl);
+  if (!got.ok) throw new Error("Gagal buka chapter FullManhwa");
+  const html = got.text;
+  const token =
+    html.match(/data-reader-image-token=["']([^"']+)["']/i)?.[1] ||
+    html.match(/data-token=["']([0-9a-f]{20,})["']/i)?.[1];
+  if (!token) throw new Error("Token gambar FullManhwa tidak ditemukan");
+
+  const apiUrl =
+    FM +
+    "/api/reader_images.php?token=" +
+    encodeURIComponent(token) +
+    "&lang=en";
+  const imgRes = await fetch(apiUrl, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+      Referer: pageUrl,
+      Cookie: got.cookie || "",
+    },
+  });
+  const json = await imgRes.json();
+  if (!json?.ok || !Array.isArray(json.images) || !json.images.length) {
+    throw new Error(json?.error || "Gambar chapter FullManhwa kosong");
+  }
+  const pages = json.images.map((it: any) => it.url).filter(Boolean);
+  const num = chSlug.replace("chapter-", "");
+  return {
+    title: "Ch. " + num,
+    pages: pages,
+    pageCount: pages.length,
+    source: "fullmanhwa",
+  };
 }
 
 function parseId(raw: string) {
@@ -314,16 +421,15 @@ export async function GET(req: NextRequest) {
       }
 
       if (parsed.source === "fullmanhwa") {
-        return NextResponse.json({
-          title: parsed.key.replace(/-/g, " "),
-          cover: null,
-          colorLabel: "Bergambar",
-          statusLabel: "Ongoing",
-          source: "fullmanhwa",
-          external: FM + "/manga/" + parsed.key,
-          chapters: [],
-          note: "Buka di FullManhwa (chapter dibaca di situs asli).",
-        });
+        try {
+          const detail = await fmDetail(parsed.key);
+          return NextResponse.json(detail);
+        } catch (e: any) {
+          return NextResponse.json(
+            { error: e?.message || "Gagal detail FullManhwa" },
+            { status: 502 }
+          );
+        }
       }
 
       // MangaDex
@@ -380,6 +486,21 @@ export async function GET(req: NextRequest) {
 
     if (action === "read") {
       const raw = chapterId || id || sp.get("url") || "";
+      if (raw.startsWith("fm:")) {
+        const body = raw.replace(/^fm:/, "");
+        const parts = body.split("/");
+        const slug = parts[0];
+        const chSlug = parts[1] || "chapter-1";
+        try {
+          const data = await fmRead(slug, chSlug);
+          return NextResponse.json(data);
+        } catch (e: any) {
+          return NextResponse.json(
+            { error: e?.message || "Gagal baca FullManhwa" },
+            { status: 502 }
+          );
+        }
+      }
       if (raw.startsWith("omega:") || raw.includes("/chapter-")) {
         // omega:slug/chapter-1
         const body = raw.replace(/^omega:/, "");
