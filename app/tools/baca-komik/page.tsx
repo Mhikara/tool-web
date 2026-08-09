@@ -1,201 +1,80 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import KomikNavbar from "@/components/komik/Navbar";
+import ComicCard from "@/components/komik/ComicCard";
+import HeroCarousel from "@/components/komik/HeroCarousel";
+import FilterBar from "@/components/komik/FilterBar";
+import { fetchHome, normalizeList, searchComics } from "@/lib/komik/api";
+import { getBookmarks, getHistory } from "@/lib/komik/storage";
+import type { ComicItem } from "@/lib/komik/types";
 
-type Item = {
-  id?: string;
-  title: string;
-  url: string;
-  cover: string | null;
-  colored?: boolean;
-  colorLabel?: string;
-  status?: string;
-  statusLabel?: string;
-  source?: string;
-  external?: string;
-};
+export default function BacaKomikCatalogPage() {
+  const sp = useSearchParams();
+  const tab = sp.get("tab") || "home";
+  const qParam = sp.get("q") || "";
 
-type Chapter = {
-  id?: string;
-  title: string;
-  url: string;
-  number?: string;
-  index?: number;
-  paid?: boolean;
-};
-
-const HISTORY_KEY = "komik_read_history_v1";
-const FAV_KEY = "komik_favorites_v1";
-
-function loadHistory(): Record<string, number> {
-  if (typeof window === "undefined") return {};
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function markRead(chapterId: string) {
-  const h = loadHistory();
-  h[chapterId] = Date.now();
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
-}
-
-function isRead(chapterId: string, history: Record<string, number>) {
-  return Boolean(history[chapterId]);
-}
-
-function loadFavorites(): Item[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(localStorage.getItem(FAV_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveFavorites(list: Item[]) {
-  localStorage.setItem(FAV_KEY, JSON.stringify(list));
-}
-
-type SourceFilter = "all" | "mangadex" | "omega" | "fullmanhwa";
-
-export default function BacaKomikPage() {
-  const [q, setQ] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
-  const [latest, setLatest] = useState<Item[]>([]);
-  const [popular, setPopular] = useState<Item[]>([]);
-  const [topRated, setTopRated] = useState<Item[]>([]);
-  const [searchList, setSearchList] = useState<Item[] | null>(null);
-  const [homeTab, setHomeTab] = useState<"latest" | "popular" | "rating">("latest");
+  const [source, setSource] = useState("all");
+  const [sort, setSort] = useState("latest");
+  const [latest, setLatest] = useState<ComicItem[]>([]);
+  const [popular, setPopular] = useState<ComicItem[]>([]);
+  const [topRated, setTopRated] = useState<ComicItem[]>([]);
+  const [searchList, setSearchList] = useState<ComicItem[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"home" | "fav">("home");
-  const [history, setHistory] = useState<Record<string, number>>({});
-  const [favorites, setFavorites] = useState<Item[]>([]);
-  const [detail, setDetail] = useState<{
-    title: string;
-    chapters: Chapter[];
-    mangaId: string;
-    cover?: string | null;
-    colorLabel?: string;
-    statusLabel?: string;
-    external?: string;
-    note?: string;
-  } | null>(null);
-  const [reader, setReader] = useState<{
-    title: string;
-    pages: string[];
-    chapterId: string;
-    chapterIndex: number;
-  } | null>(null);
+  const [favs, setFavs] = useState<ComicItem[]>([]);
+  const [hist, setHist] = useState<ReturnType<typeof getHistory>>([]);
 
-  const autoScrollRef = useRef(false);
-  const scrollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [autoOn, setAutoOn] = useState(false);
-
-  useEffect(() => {
-    setHistory(loadHistory());
-    setFavorites(loadFavorites());
-  }, []);
-
-  const stopAutoScroll = useCallback(() => {
-    autoScrollRef.current = false;
-    setAutoOn(false);
-    if (scrollTimer.current) {
-      clearInterval(scrollTimer.current);
-      scrollTimer.current = null;
-    }
-  }, []);
-
-  const startAutoScroll = useCallback(() => {
-    stopAutoScroll();
-    autoScrollRef.current = true;
-    setAutoOn(true);
-    scrollTimer.current = setInterval(() => {
-      if (!autoScrollRef.current) return;
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      if (window.scrollY >= max - 4) {
-        stopAutoScroll();
-        return;
-      }
-      window.scrollBy({ top: 2.2, behavior: "auto" });
-    }, 16);
-  }, [stopAutoScroll]);
-
-  const toggleAutoScroll = () => {
-    if (autoScrollRef.current) stopAutoScroll();
-    else startAutoScroll();
-  };
-
-  useEffect(() => {
-    return () => stopAutoScroll();
-  }, [stopAutoScroll]);
-
-  useEffect(() => {
-    if (!reader) stopAutoScroll();
-  }, [reader, stopAutoScroll]);
-
-  const loadHome = useCallback(async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setErr("");
-    setSearchList(null);
     try {
-      const res = await fetch(
-        "/api/komik?action=home&source=" + encodeURIComponent(sourceFilter)
-      );
-      const data = await res.json();
-      setLatest(data.latest || data.list || []);
-      setPopular(data.popular || []);
-      setTopRated(data.topRated || []);
-      if (!(data.latest || data.list || []).length) {
-        setErr(data.error || "Kosong");
-      }
+      const data = await fetchHome(source);
+      setLatest(normalizeList(data.latest || data.list || []));
+      setPopular(normalizeList(data.popular || []));
+      setTopRated(normalizeList(data.topRated || []));
     } catch (e: any) {
-      setErr(e.message || "Gagal");
+      setErr(e.message || "Gagal memuat");
     } finally {
       setLoading(false);
     }
-  }, [sourceFilter]);
+  }, [source]);
 
   useEffect(() => {
-    loadHome();
-  }, [loadHome]);
+    load();
+  }, [load]);
 
-  const goBack = () => {
-    stopAutoScroll();
-    if (reader) {
-      setReader(null);
-      return;
-    }
-    if (detail) {
-      setDetail(null);
-      return;
-    }
-  };
+  useEffect(() => {
+    setFavs(getBookmarks());
+    setHist(getHistory());
+  }, [tab]);
 
-  const search = async () => {
+  useEffect(() => {
+    if (!qParam) return;
+    (async () => {
+      setLoading(true);
+      try {
+        const data = await searchComics(qParam, source);
+        setSearchList(normalizeList(data.list || []));
+      } catch (e: any) {
+        setErr(e.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [qParam, source]);
+
+  const onSearch = async (q: string) => {
     if (!q.trim()) {
       setSearchList(null);
-      return loadHome();
+      return load();
     }
     setLoading(true);
     setErr("");
-    setDetail(null);
-    setReader(null);
-    setTab("home");
     try {
-      const res = await fetch(
-        "/api/komik?action=search&q=" +
-          encodeURIComponent(q.trim()) +
-          "&source=" +
-          encodeURIComponent(sourceFilter)
-      );
-      const data = await res.json();
-      setSearchList(data.list || []);
-      if (!data.list?.length) setErr("Tidak ketemu");
+      const data = await searchComics(q.trim(), source);
+      setSearchList(normalizeList(data.list || []));
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -203,708 +82,105 @@ export default function BacaKomikPage() {
     }
   };
 
-  const isFav = (id: string) =>
-    favorites.some((f) => (f.id || f.url) === id);
-
-  const toggleFav = (item: Item) => {
-    const id = item.id || item.url;
-    let next: Item[];
-    if (isFav(id)) {
-      next = favorites.filter((f) => (f.id || f.url) !== id);
-    } else {
-      next = [
-        {
-          id: item.id || item.url,
-          title: item.title,
-          url: item.url,
-          cover: item.cover,
-          colored: item.colored,
-          colorLabel: item.colorLabel,
-          statusLabel: item.statusLabel,
-          source: item.source,
-        },
-        ...favorites.filter((f) => (f.id || f.url) !== id),
-      ];
-    }
-    setFavorites(next);
-    saveFavorites(next);
-  };
-
-  const openDetail = async (item: Item) => {
-    const mangaId = item.id || item.url;
-    setLoading(true);
-    setErr("");
-    setReader(null);
-    try {
-      const res = await fetch(
-        "/api/komik?action=detail&id=" + encodeURIComponent(mangaId)
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Gagal");
-      setDetail({
-        title: data.title,
-        chapters: data.chapters || [],
-        mangaId: mangaId,
-        cover: item.cover || data.cover || null,
-        colorLabel: data.colorLabel || item.colorLabel,
-        statusLabel: data.statusLabel || item.statusLabel,
-        external: data.external,
-        note: data.note,
-      });
-      setHistory(loadHistory());
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openRead = async (ch: Chapter, index?: number) => {
-    const chapterId = ch.id || ch.url;
-    const idx = index ?? ch.index ?? 0;
-    setLoading(true);
-    setErr("");
-    stopAutoScroll();
-    try {
-      const res = await fetch(
-        "/api/komik?action=read&chapterId=" + encodeURIComponent(chapterId)
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Gagal");
-      markRead(chapterId);
-      setHistory(loadHistory());
-      setReader({
-        title: ch.title || data.title,
-        pages: data.pages || [],
-        chapterId: chapterId,
-        chapterIndex: idx,
-      });
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const goChapter = (dir: -1 | 1) => {
-    if (!detail || !reader) return;
-    const next = reader.chapterIndex + dir;
-    if (next < 0 || next >= detail.chapters.length) return;
-    openRead(detail.chapters[next], next);
-  };
-
-  const displayList =
-    tab === "fav"
-      ? favorites
-      : searchList
-        ? searchList
-        : homeTab === "popular"
-          ? popular
-          : homeTab === "rating"
-            ? topRated
-            : latest;
-
-  const sourceLabel = (s?: string) => {
-    if (s === "omega") return "Omega";
-    if (s === "fullmanhwa") return "FullManhwa";
-    if (s === "mangadex") return "MangaDex";
-    return s || "";
-  };
-
-  const card = (item: Item) => {
-    const id = item.id || item.url;
-    const fav = isFav(id);
-    return (
-      <div
-        key={id}
-        style={{
-          borderRadius: 12,
-          border: "1px solid rgba(255,255,255,0.08)",
-          background: "#16101c",
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleFav(item);
-          }}
-          style={{
-            position: "absolute",
-            top: 6,
-            right: 6,
-            zIndex: 2,
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            border: "none",
-            background: "rgba(0,0,0,0.55)",
-            fontSize: 16,
-          }}
-        >
-          {fav ? "⭐" : "☆"}
-        </button>
-        <button
-          type="button"
-          onClick={() => openDetail(item)}
-          style={{
-            textAlign: "left",
-            padding: 0,
-            border: "none",
-            background: "transparent",
-            color: "#F3EEFA",
-            width: "100%",
-          }}
-        >
-          {item.cover ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={item.cover}
-              alt={item.title}
-              style={{
-                width: "100%",
-                aspectRatio: "3/4",
-                objectFit: "cover",
-                display: "block",
-                background: "#2a1f35",
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                aspectRatio: "3/4",
-                background: "#2a1f35",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 28,
-              }}
-            >
-              📖
-            </div>
-          )}
-          <div style={{ padding: "8px 10px 10px" }}>
-            <div
-              style={{
-                fontSize: 12.5,
-                fontWeight: 700,
-                lineHeight: 1.35,
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
-                overflow: "hidden",
-              }}
-            >
-              {item.title}
-            </div>
-            <div
-              style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}
-            >
-              {item.source && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: "2px 6px",
-                    borderRadius: 6,
-                    background: "rgba(56,189,248,0.2)",
-                    color: "#7DD3FC",
-                  }}
-                >
-                  {sourceLabel(item.source)}
-                </span>
-              )}
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: "2px 6px",
-                  borderRadius: 6,
-                  background: item.colored
-                    ? "rgba(34,197,94,0.2)"
-                    : "rgba(148,163,184,0.2)",
-                  color: item.colored ? "#86EFAC" : "#94A3B8",
-                }}
-              >
-                {item.colorLabel ||
-                  (item.colored ? "Bergambar" : "Tidak bergambar")}
-              </span>
-              {item.statusLabel && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: "2px 6px",
-                    borderRadius: 6,
-                    background: "rgba(168,85,247,0.2)",
-                    color: "#D8B4FE",
-                  }}
-                >
-                  {item.statusLabel}
-                </span>
-              )}
-            </div>
-          </div>
-        </button>
-      </div>
-    );
-  };
+  const grid = useMemo(() => {
+    if (tab === "favorit") return favs;
+    if (searchList) return searchList;
+    if (sort === "popular") return popular.length ? popular : latest;
+    if (sort === "rating") return topRated.length ? topRated : latest;
+    return latest;
+  }, [tab, favs, searchList, sort, popular, topRated, latest]);
 
   return (
-    <div
-      style={{
-        background: "#0B0710",
-        minHeight: "100vh",
-        color: "#F3EEFA",
-        fontFamily: "sans-serif",
-        padding: 16,
-        paddingBottom: 48,
-      }}
-    >
-      <div style={{ maxWidth: 560, margin: "0 auto" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 8,
-            alignItems: "center",
-          }}
-        >
-          <Link href="/" style={{ color: "#9C90AC", fontSize: 13 }}>
-            ← Beranda
-          </Link>
-          {(reader || detail) && (
-            <button
-              type="button"
-              onClick={goBack}
-              style={{
-                background: "#A855F7",
-                border: "none",
-                color: "#fff",
-                borderRadius: 8,
-                padding: "6px 12px",
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              Kembali
-            </button>
-          )}
-          {!reader && !detail && (
-            <button
-              type="button"
-              onClick={loadHome}
-              style={{
-                background: "#A855F7",
-                border: "none",
-                color: "#fff",
-                borderRadius: 8,
-                padding: "6px 12px",
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              Refresh
-            </button>
-          )}
-        </div>
-
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: "12px 0 4px" }}>
-          📖 Baca Komik
-        </h1>
-        <p style={{ fontSize: 12, color: "#9C90AC", marginBottom: 10 }}>
-          Campuran sumber · Chapter lengkap
-        </p>
-
-        {!detail && !reader && (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 6,
-              marginBottom: 10,
-            }}
-          >
-            {(
-              [
-                ["all", "Semua sumber"],
-                ["omega", "Omega 18+"],
-                ["fullmanhwa", "FullManhwa"],
-                ["mangadex", "MangaDex ID"],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setSourceFilter(k)}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 16,
-                  border: "none",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  background: sourceFilter === k ? "#A855F7" : "#1C1226",
-                  color: "#fff",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {!detail && !reader && (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      <KomikNavbar
+        onSearch={onSearch}
+        active={
+          tab === "favorit"
+            ? "favorit"
+            : tab === "riwayat"
+              ? "riwayat"
+              : tab === "katalog"
+                ? "katalog"
+                : "home"
+        }
+      />
+      <main className="mx-auto max-w-6xl px-3 py-4 sm:px-4">
+        {tab !== "favorit" && tab !== "riwayat" && (
           <>
-            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <button
-                type="button"
-                onClick={() => setTab("home")}
-                style={{
-                  flex: 1,
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "none",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  background: tab === "home" ? "#A855F7" : "#1C1226",
-                  color: "#fff",
-                }}
-              >
-                Jelajah
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab("fav")}
-                style={{
-                  flex: 1,
-                  padding: 10,
-                  borderRadius: 10,
-                  border: "none",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  background: tab === "fav" ? "#A855F7" : "#1C1226",
-                  color: "#fff",
-                }}
-              >
-                ⭐ Favorit ({favorites.length})
-              </button>
-            </div>
-
-            {tab === "home" && (
-              <>
-                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                  {(
-                    [
-                      ["latest", "Terbaru"],
-                      ["popular", "Terpopuler"],
-                      ["rating", "Rating"],
-                    ] as const
-                  ).map(([k, label]) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => {
-                        setHomeTab(k);
-                        setSearchList(null);
-                      }}
-                      style={{
-                        flex: 1,
-                        padding: "8px 4px",
-                        borderRadius: 8,
-                        border: "none",
-                        fontWeight: 700,
-                        fontSize: 12,
-                        background:
-                          homeTab === k && !searchList ? "#7C3AED" : "#1C1226",
-                        color: "#fff",
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                  <input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && search()}
-                    placeholder="Cari judul..."
-                    style={{
-                      flex: 1,
-                      padding: 10,
-                      borderRadius: 10,
-                      border: "1px solid #333",
-                      background: "#1C1226",
-                      color: "#fff",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={search}
-                    style={{
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      border: "none",
-                      background: "#A855F7",
-                      color: "#fff",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Cari
-                  </button>
-                </div>
-              </>
-            )}
+            <HeroCarousel items={popular.length ? popular : latest} />
+            <FilterBar
+              source={source}
+              onSource={setSource}
+              sort={sort}
+              onSort={setSort}
+            />
           </>
         )}
 
-        {loading && (
-          <p style={{ fontSize: 13, color: "#9C90AC" }}>Memuat...</p>
-        )}
-        {err && !loading && !reader && (
-          <p style={{ fontSize: 13, color: "#FBBF24" }}>{err}</p>
-        )}
-
-        {reader && (
-          <div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 8,
-                marginBottom: 8,
-                alignItems: "center",
-              }}
-            >
-              <h2 style={{ fontSize: 14, fontWeight: 700, margin: 0, flex: 1 }}>
-                {reader.title}
-              </h2>
-              <button
-                type="button"
-                onClick={toggleAutoScroll}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: autoOn ? "#22c55e" : "#374151",
-                  color: "#fff",
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-              >
-                {autoOn ? "⏸ Stop" : "▶ Auto"}
-              </button>
-            </div>
-            <p style={{ fontSize: 11, color: "#9C90AC", marginBottom: 8 }}>
-              {reader.pages.length} halaman · ketuk gambar = auto scroll
-            </p>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button
-                type="button"
-                disabled={!detail || reader.chapterIndex <= 0}
-                onClick={() => goChapter(-1)}
-                style={{
-                  flex: 1,
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#1C1226",
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  opacity: reader.chapterIndex <= 0 ? 0.4 : 1,
-                }}
-              >
-                ← Prev
-              </button>
-              <button
-                type="button"
-                disabled={
-                  !detail ||
-                  reader.chapterIndex >= (detail?.chapters.length || 1) - 1
-                }
-                onClick={() => goChapter(1)}
-                style={{
-                  flex: 1,
-                  padding: 10,
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#1C1226",
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: 12,
-                  opacity:
-                    reader.chapterIndex >= (detail?.chapters.length || 1) - 1
-                      ? 0.4
-                      : 1,
-                }}
-              >
-                Next →
-              </button>
-            </div>
-            <div onClick={toggleAutoScroll} style={{ cursor: "pointer" }}>
-              {reader.pages.map((src, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={i}
-                  src={src}
-                  alt={"Hal " + (i + 1)}
-                  loading="lazy"
-                  draggable={false}
-                  style={{
-                    width: "100%",
-                    display: "block",
-                    background: "#111",
-                    pointerEvents: "none",
-                  }}
-                />
+        {tab === "riwayat" && (
+          <section className="mb-4">
+            <h2 className="mb-3 text-lg font-bold">Riwayat baca</h2>
+            <div className="space-y-2">
+              {hist.length === 0 && (
+                <p className="text-sm text-zinc-500">Belum ada riwayat.</p>
+              )}
+              {hist.map((h) => (
+                <a
+                  key={h.chapterId + h.at}
+                  href={
+                    "/tools/baca-komik/read/" +
+                    encodeURIComponent(h.chapterId) +
+                    "?comic=" +
+                    encodeURIComponent(h.comicId) +
+                    "&title=" +
+                    encodeURIComponent(h.chapterTitle)
+                  }
+                  className="flex gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-2"
+                >
+                  {h.cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={h.cover}
+                      alt=""
+                      className="h-14 w-10 rounded object-cover"
+                    />
+                  ) : (
+                    <div className="h-14 w-10 rounded bg-zinc-800" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{h.title}</p>
+                    <p className="text-xs text-zinc-500">{h.chapterTitle}</p>
+                  </div>
+                </a>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
-        {!reader && detail && (
-          <div>
-            <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-              {detail.cover ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={detail.cover}
-                  alt=""
-                  style={{
-                    width: 90,
-                    height: 120,
-                    objectFit: "cover",
-                    borderRadius: 8,
-                    background: "#2a1f35",
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: 90,
-                    height: 120,
-                    borderRadius: 8,
-                    background: "#2a1f35",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  📖
-                </div>
-              )}
-              <div style={{ flex: 1 }}>
-                <h2 style={{ fontSize: 16, fontWeight: 700 }}>{detail.title}</h2>
-                <p style={{ fontSize: 12, color: "#9C90AC", marginTop: 4 }}>
-                  {detail.chapters.length} chapter
-                </p>
-                {detail.note && (
-                  <p style={{ fontSize: 12, color: "#FBBF24", marginTop: 6 }}>
-                    {detail.note}
-                  </p>
-                )}
-                {detail.external && (
-                  <a
-                    href={detail.external}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      display: "inline-block",
-                      marginTop: 8,
-                      fontSize: 12,
-                      color: "#A78BFA",
-                    }}
-                  >
-                    Buka di situs asli →
-                  </a>
-                )}
-                <button
-                  type="button"
-                  onClick={() =>
-                    toggleFav({
-                      id: detail.mangaId,
-                      title: detail.title,
-                      url: detail.mangaId,
-                      cover: detail.cover || null,
-                    })
-                  }
-                  style={{
-                    marginTop: 10,
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #A855F7",
-                    background: isFav(detail.mangaId)
-                      ? "rgba(168,85,247,0.25)"
-                      : "transparent",
-                    color: "#E9D5FF",
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
-                >
-                  {isFav(detail.mangaId) ? "⭐ Favorit" : "☆ Favorit"}
-                </button>
-              </div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {detail.chapters.map((c, idx) => {
-                const cid = c.id || c.url;
-                const read = isRead(cid, history);
-                return (
-                  <button
-                    key={cid}
-                    type="button"
-                    onClick={() => openRead(c, idx)}
-                    style={{
-                      textAlign: "left",
-                      padding: "10px 12px",
-                      borderRadius: 8,
-                      border: read
-                        ? "1px solid #3f3f46"
-                        : "1px solid rgba(168,85,247,0.35)",
-                      background: read ? "#18181b" : "#1C1226",
-                      color: read ? "#71717a" : "#E9D5FF",
-                      fontSize: 13,
-                      display: "flex",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span>
-                      {c.title}
-                      {c.paid ? " 🔒" : ""}
-                    </span>
-                    <span style={{ fontSize: 11 }}>
-                      {read ? "Dibaca" : "Baca"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {!detail && !reader && (
+        {tab !== "riwayat" && (
           <>
-            {tab === "fav" && favorites.length === 0 && (
-              <p style={{ fontSize: 13, color: "#9C90AC" }}>
-                Belum ada favorit. Ketuk ☆ di cover.
-              </p>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-bold">
+                {tab === "favorit"
+                  ? "Favorit"
+                  : searchList
+                    ? "Hasil pencarian"
+                    : "Katalog"}
+              </h2>
+              <span className="text-xs text-zinc-500">{grid.length} judul</span>
+            </div>
+            {loading && <p className="text-sm text-zinc-500">Memuat...</p>}
+            {err && !loading && (
+              <p className="mb-3 text-sm text-amber-400">{err}</p>
             )}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 12,
-              }}
-            >
-              {displayList.map((item) => card(item))}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {grid.map((item) => (
+                <ComicCard key={item.id} item={item} />
+              ))}
             </div>
           </>
         )}
-      </div>
+      </main>
     </div>
   );
 }
