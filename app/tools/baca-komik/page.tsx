@@ -20,6 +20,10 @@ export default function BacaKomikCatalogPage() {
     "all"
   );
   const [q, setQ] = useState("");
+  const [genreId, setGenreId] = useState("");
+  const [genres, setGenres] = useState<{ id: string; name: string }[]>([]);
+  const [typeFilter, setTypeFilter] = useState<"all" | "manga" | "manhwa" | "manhua">("all");
+
   const [suggest, setSuggest] = useState<ComicItem[]>([]);
   const [showSuggest, setShowSuggest] = useState(false);
   const [latest, setLatest] = useState<ComicItem[]>([]);

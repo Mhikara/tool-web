@@ -52,6 +52,39 @@ function mdColored(manga: Record<string, unknown>) {
   return false;
 }
 
+
+function mdGenres(manga: any): string[] {
+  const tags = manga?.attributes?.tags || [];
+  const out: string[] = [];
+  for (const tag of tags) {
+    if (tag?.attributes?.group !== "genre") continue;
+    const name = tag?.attributes?.name?.en;
+    if (name) out.push(name);
+  }
+  return out;
+}
+
+function mdTypeLabel(manga: any): string {
+  const lang = (manga?.attributes?.originalLanguage || "").toLowerCase();
+  if (lang === "ko") return "MANHWA";
+  if (lang === "zh" || lang === "zh-hk") return "MANHUA";
+  if (lang === "ja") return "MANGA";
+  return "KOMIK";
+}
+
+
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "";
+  const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (s < 60) return "Baru saja";
+  if (s < 3600) return Math.floor(s / 60) + "m lalu";
+  if (s < 86400) return Math.floor(s / 3600) + "j lalu";
+  if (s < 86400 * 7) return Math.floor(s / 86400) + "h lalu";
+  return Math.floor(s / (86400 * 7)) + "mg lalu";
+}
+
 function mapMd(manga: {
   id: string;
   attributes?: {
@@ -76,6 +109,11 @@ function mapMd(manga: {
     cover: mdCover(manga.id, fileName),
     colored,
     colorLabel: colored ? "Bergambar" : "Tidak bergambar",
+    updatedAt: m?.attributes?.updatedAt || null,
+    uploadedLabel: relativeTime(m?.attributes?.updatedAt),
+    genres: mdGenres(m),
+    typeLabel: mdTypeLabel(m),
+    originalLanguage: m?.attributes?.originalLanguage || "",
     status,
     statusLabel:
       status === "completed"
@@ -94,6 +132,19 @@ async function mdList(orderKey: string, limit: number) {
   url.searchParams.set(`order[${orderKey}]`, "desc");
   url.searchParams.append("availableTranslatedLanguage[]", "id");
   url.searchParams.append("includes[]", "cover_art");
+      if (genre) {
+        url.searchParams.append("includedTags[]", genre);
+        url.searchParams.set("includedTagsMode", "AND");
+      }
+      if (typeFilter === "manhwa") {
+        url.searchParams.append("originalLanguage[]", "ko");
+      } else if (typeFilter === "manhua") {
+        url.searchParams.append("originalLanguage[]", "zh");
+        url.searchParams.append("originalLanguage[]", "zh-hk");
+      } else if (typeFilter === "manga") {
+        url.searchParams.append("originalLanguage[]", "ja");
+      }
+
   url.searchParams.append("contentRating[]", "safe");
   url.searchParams.append("contentRating[]", "suggestive");
   url.searchParams.append("contentRating[]", "erotica");
@@ -373,6 +424,8 @@ export async function GET(req: NextRequest) {
   try {
     const sp = req.nextUrl.searchParams;
     const action = sp.get("action") || "home";
+    const genre = sp.get("genre") || "";
+    const typeFilter = (sp.get("type") || "all").toLowerCase();
     const id = sp.get("id") || "";
     const q = sp.get("q") || "";
     const chapterId = sp.get("chapterId") || "";
