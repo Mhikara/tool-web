@@ -126,7 +126,7 @@ function mapMd(manga: {
   };
 }
 
-async function mdList(orderKey: string, limit: number) {
+async function mdList(orderKey: string, limit: number, genre: string = "", typeFilter: string = "all") {
   const url = new URL(`${MD}/manga`);
   url.searchParams.set("limit", String(limit));
   url.searchParams.set(`order[${orderKey}]`, "desc");
@@ -433,7 +433,7 @@ export async function GET(req: NextRequest) {
 
     if (action === "home") {
       const tasks: Promise<unknown[]>[] = [];
-      tasks.push(source === "all" || source === "mangadex" ? mdList("latestUploadedChapter", 12) : Promise.resolve([]));
+      tasks.push(source === "all" || source === "mangadex" ? mdList("latestUploadedChapter", 12, genre, typeFilter) : Promise.resolve([]));
       tasks.push(source === "all" || source === "omega" ? omegaList("latest", 12) : Promise.resolve([]));
       tasks.push(source === "all" || source === "fullmanhwa" ? fmList() : Promise.resolve([]));
 
@@ -444,8 +444,8 @@ export async function GET(req: NextRequest) {
       let topRated: unknown[] = [];
       if (source === "all" || source === "mangadex") {
         const [p, r] = await Promise.all([
-          mdList("followedCount", 12),
-          mdList("rating", 12),
+          mdList("followedCount", 12, genre, typeFilter),
+          mdList("rating", 12, genre, typeFilter),
         ]);
         popular = p;
         topRated = r;
