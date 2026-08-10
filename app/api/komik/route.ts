@@ -407,9 +407,14 @@ async function fmRead(slug: string, chapterSlug: string) {
     throw new Error(json.error || "Gambar chapter FullManhwa kosong");
   }
 
-  const pages = json.images.map((item) => item.url).filter(Boolean) as string[];
+  const pages = (json.images.map((item) => item.url).filter(Boolean) as string[]).map(
+    (u) =>
+      "/api/komik/image?url=" +
+      encodeURIComponent(u) +
+      "&f=webp&q=72&w=1080"
+  );
   return {
-    title: `Ch. ${chapterSlug.replace("chapter-", "")}`,
+    title: "Ch. " + chapterSlug.replace("chapter-", ""),
     pages,
     pageCount: pages.length,
     source: "fullmanhwa",
