@@ -109,11 +109,11 @@ function mapMd(manga: {
     cover: mdCover(manga.id, fileName),
     colored,
     colorLabel: colored ? "Bergambar" : "Tidak bergambar",
-    updatedAt: m?.attributes?.updatedAt || null,
-    uploadedLabel: relativeTime(m?.attributes?.updatedAt),
-    genres: mdGenres(m),
-    typeLabel: mdTypeLabel(m),
-    originalLanguage: m?.attributes?.originalLanguage || "",
+    updatedAt: manga?.attributes?.updatedAt || null,
+    uploadedLabel: relativeTime(manga?.attributes?.updatedAt),
+    genres: mdGenres(manga),
+    typeLabel: mdTypeLabel(manga),
+    originalLanguage: manga?.attributes?.originalLanguage || "",
     status,
     statusLabel:
       status === "completed"
