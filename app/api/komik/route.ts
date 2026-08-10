@@ -6,6 +6,7 @@ export const maxDuration = 30;
 const MD = "https://api.mangadex.org";
 const OMEGA = "https://api.omegascans.org";
 const FM = "https://fullmanhwa.com";
+const MG = "https://mgread.io";
 const UA = "tool-web-komik/1.1";
 
 function mdCover(mangaId: string, fileName: string | null | undefined) {
@@ -421,10 +422,178 @@ async function fmRead(slug: string, chapterSlug: string) {
   };
 }
 
+
+/* ---------- Mgread.io (WordPress REST + scrape chapter) ---------- */
+async function mgrList() {
+  try {
+    const url =
+      MG +
+      "/wp-json/wp/v2/manga?per_page=24&page=1&orderby=modified&order=desc&_embed=1";
+    const res = await fetch(url, {
+      headers: { Accept: "application/json", "User-Agent": UA },
+      next: { revalidate: 120 },
+    });
+    if (!res.ok) return [];
+    const arr = (await res.json()) as any[];
+    return (arr || []).map(function (m: any) {
+      const title =
+        (m.title && (m.title.rendered || m.title)) || m.slug || "Tanpa judul";
+      const clean = String(title).replace(/<[^>]+>/g, "");
+      let cover: string | null = null;
+      try {
+        cover =
+          m._embedded?.["wp:featuredmedia"]?.[0]?.source_url ||
+          m._embedded?.["wp:featuredmedia"]?.[0]?.media_details?.sizes?.medium
+            ?.source_url ||
+          null;
+      } catch {}
+      return {
+        id: "mgr:" + m.slug,
+        source: "mgread",
+        title: clean,
+        url: m.slug,
+        cover: cover,
+        colored: true,
+        colorLabel: "Bergambar",
+        statusLabel: "Ongoing",
+        external: m.link || MG + "/manga/" + m.slug + "/",
+        updatedAt: m.modified || m.date || null,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function mgrSearch(q: string) {
+  try {
+    const url =
+      MG +
+      "/wp-json/wp/v2/manga?per_page=24&search=" +
+      encodeURIComponent(q) +
+      "&_embed=1";
+    const res = await fetch(url, {
+      headers: { Accept: "application/json", "User-Agent": UA },
+    });
+    if (!res.ok) return [];
+    const arr = (await res.json()) as any[];
+    return (arr || []).map(function (m: any) {
+      const title =
+        (m.title && (m.title.rendered || m.title)) || m.slug || "Tanpa judul";
+      let cover: string | null = null;
+      try {
+        cover = m._embedded?.["wp:featuredmedia"]?.[0]?.source_url || null;
+      } catch {}
+      return {
+        id: "mgr:" + m.slug,
+        source: "mgread",
+        title: String(title).replace(/<[^>]+>/g, ""),
+        url: m.slug,
+        cover: cover,
+        colored: true,
+        colorLabel: "Bergambar",
+        statusLabel: "Ongoing",
+        external: m.link || MG + "/manga/" + m.slug + "/",
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function mgrDetail(slug: string) {
+  const pageUrl = MG + "/manga/" + slug + "/";
+  const res = await fetch(pageUrl, {
+    headers: {
+      "User-Agent": UA,
+      Accept: "text/html",
+    },
+  });
+  if (!res.ok) throw new Error("Mgread detail gagal");
+  const html = await res.text();
+
+  const title =
+    html.match(/property=["']og:title["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    slug.replace(/-/g, " ");
+  const cover =
+    html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    null;
+
+  const seen = new Set<string>();
+  const chapters: any[] = [];
+  const re = new RegExp(
+    "/manga/" +
+      slug.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&") +
+      "/(chapter-[0-9]+)/?",
+    "gi"
+  );
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const ch = m[1].toLowerCase();
+    if (seen.has(ch)) continue;
+    seen.add(ch);
+    const num = ch.replace("chapter-", "");
+    chapters.push({
+      id: "mgr:" + slug + "/" + ch,
+      title: "Ch. " + num,
+      url: "mgr:" + slug + "/" + ch,
+      number: Number(num) || 0,
+    });
+  }
+  chapters.sort(function (a, b) {
+    return a.number - b.number;
+  });
+
+  return {
+    title: title.replace(/\s*[-|].*$/, "").trim(),
+    cover: cover,
+    colorLabel: "Bergambar",
+    statusLabel: "Ongoing",
+    source: "mgread",
+    external: pageUrl,
+    chapters: chapters,
+    totalChapters: chapters.length,
+  };
+}
+
+async function mgrRead(slug: string, chapterSlug: string) {
+  const pageUrl = MG + "/manga/" + slug + "/" + chapterSlug + "/";
+  const res = await fetch(pageUrl, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      Accept: "text/html",
+      Referer: MG + "/",
+    },
+  });
+  if (!res.ok) throw new Error("Gagal buka chapter Mgread");
+  const html = await res.text();
+  const found = html.match(/https:\/\/mg\.mgread\.io\/[^"'\\s]+/g) || [];
+  const pages: string[] = [];
+  const seen = new Set<string>();
+  for (const u of found) {
+    const clean = u.replace(/[\\)>]+$/, "");
+    if (seen.has(clean)) continue;
+    seen.add(clean);
+    pages.push(
+      "/api/komik/image?url=" + encodeURIComponent(clean) + "&f=webp&q=72&w=1080"
+    );
+  }
+  if (!pages.length) throw new Error("Gambar Mgread kosong");
+  return {
+    title: "Ch. " + chapterSlug.replace("chapter-", ""),
+    pages: pages,
+    pageCount: pages.length,
+    source: "mgread",
+  };
+}
+
+
 function parseId(raw: string) {
   if (raw.startsWith("md:")) return { source: "mangadex", key: raw.slice(3) };
   if (raw.startsWith("omega:")) return { source: "omega", key: raw.slice(6) };
   if (raw.startsWith("fm:")) return { source: "fullmanhwa", key: raw.slice(3) };
+  if (raw.startsWith("mgr:")) return { source: "mgread", key: raw.slice(4) };
   if (/^[0-9a-f-]{36}$/i.test(raw)) return { source: "mangadex", key: raw };
   return { source: "omega", key: raw };
 }

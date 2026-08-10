@@ -10,6 +10,8 @@ const ALLOW = [
   "img03.manhwabuddy.com",
   "img04.manhwabuddy.com",
   "img05.manhwabuddy.com",
+  "mg.mgread.io",
+  "mgread.io",
 ];
 
 export async function GET(req: NextRequest) {
