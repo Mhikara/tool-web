@@ -143,6 +143,10 @@ async function mdList(orderKey: string, limit: number, genre: string = "", typeF
         url.searchParams.append("originalLanguage[]", "zh-hk");
       } else if (typeFilter === "manga") {
         url.searchParams.append("originalLanguage[]", "ja");
+      if (demographic && demographic !== "all") {
+        url.searchParams.append("publicationDemographic[]", demographic);
+      }
+
       }
 
   url.searchParams.append("contentRating[]", "safe");
@@ -425,6 +429,7 @@ export async function GET(req: NextRequest) {
     const sp = req.nextUrl.searchParams;
     const action = sp.get("action") || "home";
     const genre = sp.get("genre") || "";
+    const demographic = (sp.get("demographic") || "all").toLowerCase();
     const typeFilter = (sp.get("type") || "all").toLowerCase();
     const id = sp.get("id") || "";
     const q = sp.get("q") || "";
