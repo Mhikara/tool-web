@@ -75,4 +75,21 @@ export const toolsList: SimpleTool[] = [
     icon: "🔒",
     href: "/tools/web-encrypt",
   },
+,
+  {
+    slug: "upload-zip",
+    title: "Upload ZIP",
+    description: "Ekstrak ZIP lalu push GitHub atau deploy Vercel",
+    tag: "DEPLOY",
+    icon: "📦",
+    href: "/tools/upload-zip",
+  },
+  {
+    slug: "multi-agent",
+    title: "Multi-Agent AI",
+    description: "Planner–Builder dengan rotasi API key, memori & project",
+    tag: "AI",
+    icon: "🤖",
+    href: "/tools/multi-agent",
+  },
 ];
