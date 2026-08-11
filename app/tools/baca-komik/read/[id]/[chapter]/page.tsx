@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -25,13 +25,6 @@ export default function ReaderPage() {
   const chapterId = decodeURIComponent(String(params.chapter || ""));
   const router = useRouter();
   
-  // Redirect FullManhwa chapters ke proxy
-  useEffect(() => {
-    if (chapterId.startsWith("fm:") || chapterId.includes("/chapter-")) {
-      const path = chapterId.replace(/^fm:/, "").replace(/^/, "/");
-      router.replace("/tools/baca-komik/fullmanhwa?path=" + encodeURIComponent(path));
-    }
-  }, [chapterId, router]);
   
   const { addHistory } = useComicStorage();
 
