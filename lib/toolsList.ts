@@ -92,4 +92,13 @@ export const toolsList: SimpleTool[] = [
     icon: "🤖",
     href: "/tools/multi-agent",
   },
+,
+  {
+    slug: "api-keys",
+    title: "API Key Manager",
+    description: "Kelola & rotasi API key AI (Groq, OpenRouter, dll.)",
+    tag: "AI",
+    icon: "🔑",
+    href: "/tools/api-keys",
+  },
 ];
