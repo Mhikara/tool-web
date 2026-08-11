@@ -24,8 +24,9 @@ export async function GET(req: NextRequest) {
     if (!raw) return NextResponse.json({ error: "url wajib" }, { status: 400 });
     const target = new URL(raw);
     if (!allowed(target.hostname)) {
-      return NextResponse.json({ error: "host diblokir: " + target.hostname }, { status: 403 });
+      return NextResponse.json({ error: "host diblokir" }, { status: 403 });
     }
+
     const res = await fetch(target.toString(), {
       headers: {
         "User-Agent":
@@ -33,17 +34,27 @@ export async function GET(req: NextRequest) {
         Accept: "image/avif,image/webp,image/*,*/*;q=0.8",
         Referer: "https://fullmanhwa.com/",
       },
-      redirect: "follow",
-    });
+      // cache fetch di Next (revalidate 1 hari)
+      next: { revalidate: 86400 },
+    } as RequestInit);
+
     if (!res.ok) {
       return NextResponse.json({ error: "upstream " + res.status }, { status: 502 });
     }
+
     const buf = await res.arrayBuffer();
+    const ct = res.headers.get("content-type") || "image/jpeg";
+
     return new NextResponse(buf, {
       status: 200,
       headers: {
-        "Content-Type": res.headers.get("content-type") || "image/jpeg",
-        "Cache-Control": "public, max-age=86400, s-maxage=604800",
+        "Content-Type": ct,
+        // browser + CDN edge
+        "Cache-Control":
+          "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400, immutable",
+        "CDN-Cache-Control": "public, max-age=604800",
+        "Vercel-CDN-Cache-Control": "public, max-age=604800",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (e: any) {

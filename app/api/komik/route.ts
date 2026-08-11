@@ -820,7 +820,27 @@ export async function GET(req: NextRequest) {
     const chapterId = sp.get("chapterId") || "";
     const source = (sp.get("source") || "all").toLowerCase();
 
-    if (action === "home") {
+    
+  if (action === "random") {
+    try {
+      const bag: any[] = [];
+      const tasks: Promise<any[]>[] = [];
+      if (typeof mdList === "function") tasks.push(mdList({ limit: 30 }).catch(() => []));
+      if (typeof fmList === "function") tasks.push(fmList().catch(() => []));
+      if (typeof kmList === "function") tasks.push(kmList().catch(() => []));
+      const settled = await Promise.all(tasks);
+      for (const arr of settled) bag.push(...(arr || []));
+      for (let i = bag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bag[i], bag[j]] = [bag[j], bag[i]];
+      }
+      return NextResponse.json({ items: bag.slice(0, 24), random: true });
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message || "random gagal" }, { status: 500 });
+    }
+  }
+
+if (action === "home") {
       const tasks: Promise<unknown[]>[] = [];
       tasks.push(source === "all" || source === "mangadex" ? mdList("latestUploadedChapter", 12, genre, typeFilter) : Promise.resolve([]));
       tasks.push(source === "all" || source === "omega" ? omegaList("latest", 12) : Promise.resolve([]));

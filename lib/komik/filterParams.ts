@@ -1,18 +1,40 @@
-"use client";
+export type ComicType = "all" | "manga" | "manhwa" | "manhua";
+export type Demographic =
+  | "all"
+  | "shounen"
+  | "shoujo"
+  | "seinen"
+  | "josei"
+  | "none";
 
-/** Merge query: ubah 1 key tanpa hapus key lain */
-export function mergeQuery(
-  current: URLSearchParams,
-  patch: Record<string, string | null | undefined>
-): string {
-  const sp = new URLSearchParams(current.toString());
-  for (const [k, v] of Object.entries(patch)) {
-    if (v === null || v === undefined || v === "" || v === "all") {
-      sp.delete(k);
-    } else {
-      sp.set(k, v);
-    }
+export const TYPE_OPTS: { id: ComicType; label: string }[] = [
+  { id: "all", label: "Semua" },
+  { id: "manga", label: "Manga" },
+  { id: "manhwa", label: "Manhwa" },
+  { id: "manhua", label: "Manhua" },
+];
+
+export const DEMO_OPTS: { id: Demographic; label: string }[] = [
+  { id: "all", label: "Gender: Semua" },
+  { id: "shounen", label: "Shounen" },
+  { id: "shoujo", label: "Shoujo" },
+  { id: "seinen", label: "Seinen" },
+  { id: "josei", label: "Josei" },
+];
+
+/** Map type → MangaDex originalLanguage */
+export function mdLangForType(t: ComicType): string[] {
+  if (t === "manga") return ["ja"];
+  if (t === "manhwa") return ["ko"];
+  if (t === "manhua") return ["zh", "zh-hk"];
+  return [];
+}
+
+export function pickRandom<T>(arr: T[], n: number): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
-  const q = sp.toString();
-  return q ? "?" + q : "";
+  return copy.slice(0, n);
 }
