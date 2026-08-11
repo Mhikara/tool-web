@@ -257,59 +257,118 @@ async function fmFetch(url: string, cookie?: string) {
   return { ok: res.ok, status: res.status, text, cookie: cookieOut };
 }
 
+
 async function fmList() {
   try {
-    const got = await fmFetch(`${FM}/latest`);
-    if (!got.ok) return [];
+    const got = await fmFetch(`${FM}/`);
+    if (!got.ok) {
+      const latest = await fmFetch(`${FM}/latest`);
+      if (!latest.ok) return [];
+      return parseFmCards(latest.text);
+    }
+    return parseFmCards(got.text);
+  } catch {
+    return [];
+  }
+}
 
-    const items: Array<{
-      id: string;
-      source: string;
-      title: string;
-      url: string;
-      cover: string | null;
-      colored: boolean;
-      colorLabel: string;
-      status: string;
-      statusLabel: string;
-      external: string;
-    }> = [];
-    const seen = new Set<string>();
-    const linkRe = /href="(?:https?:\/\/fullmanhwa\.com)?\/manga\/([a-z0-9-]+)"/gi;
-    let match: RegExpExecArray | null;
+function proxyCover(url: string | null | undefined): string | null {
+  if (!url) return null;
+  if (url.startsWith("/api/komik/image")) return url;
+  return "/api/komik/image?url=" + encodeURIComponent(url);
+}
 
-    while ((match = linkRe.exec(got.text)) !== null) {
-      const slug = match[1];
+function parseFmCards(html: string) {
+  const items: Array<{
+    id: string;
+    source: string;
+    title: string;
+    url: string;
+    cover: string | null;
+    colored: boolean;
+    colorLabel: string;
+    status: string;
+    statusLabel: string;
+    external: string;
+  }> = [];
+  const seen = new Set<string>();
+
+  // href="/manga/slug" ... img src="https://img.fullmanhwa.com/covers/..."
+  const re1 =
+    /href="(?:https?:\/\/fullmanhwa\.com)?\/manga\/([a-z0-9-]+)"[^>]*>[\s\S]{0,500}?src="(https:\/\/img\.fullmanhwa\.com\/covers\/[^"]+)"/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re1.exec(html)) !== null) {
+    const slug = m[1];
+    if (seen.has(slug) || slug === "page") continue;
+    seen.add(slug);
+    const cover = m[2];
+    const title = slug
+      .replace(/-/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+    items.push({
+      id: "fm:" + slug,
+      source: "fullmanhwa",
+      title,
+      url: slug,
+      cover: proxyCover(cover),
+      colored: true,
+      colorLabel: "Bergambar",
+      status: "ongoing",
+      statusLabel: "Ongoing",
+      external: FM + "/manga/" + slug + "/",
+    });
+  }
+
+  // fallback: img dulu lalu link
+  if (items.length < 8) {
+    const re2 =
+      /src="(https:\/\/img\.fullmanhwa\.com\/covers\/[^"]+)"[\s\S]{0,500}?href="(?:https?:\/\/fullmanhwa\.com)?\/manga\/([a-z0-9-]+)"/gi;
+    while ((m = re2.exec(html)) !== null) {
+      const slug = m[2];
       if (seen.has(slug) || slug === "page") continue;
       seen.add(slug);
-
       items.push({
-        id: `fm:${slug}`,
+        id: "fm:" + slug,
         source: "fullmanhwa",
         title: slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
         url: slug,
-        cover: null,
+        cover: proxyCover(m[1]),
         colored: true,
         colorLabel: "Bergambar",
         status: "ongoing",
         statusLabel: "Ongoing",
-        external: `${FM}/manga/${slug}`,
+        external: FM + "/manga/" + slug + "/",
       });
-
-      if (items.length >= 30) break;
     }
-
-    const coverRe =
-      /https:\/\/img\.fullmanhwa\.com\/covers\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/gi;
-    const covers = got.text.match(coverRe) || [];
-    items.forEach((item, index) => {
-      if (covers[index]) item.cover = covers[index];
-    });
-
-    return items;
-  } catch {
-    return [];
   }
+
+  // alt text untuk judul lebih bagus
+  for (const it of items) {
+    const altRe = new RegExp(
+      'alt="([^"]{2,120})"[^>]{0,200}src="' +
+        (it.cover || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/.*url=/, "") ,
+      "i"
+    );
+  }
+
+  // Ambil judul dari alt dekat slug
+  const titleMap: Record<string, string> = {};
+  const altLink =
+    /(?:alt|title)="([^"]{3,100})"[^>]{0,80}(?:src="[^"]*")?[^>]{0,200}href="(?:https?:\/\/fullmanhwa\.com)?\/manga\/([a-z0-9-]+)"/gi;
+  while ((m = altLink.exec(html)) !== null) {
+    titleMap[m[2]] = m[1].trim();
+  }
+  const linkAlt =
+    /href="(?:https?:\/\/fullmanhwa\.com)?\/manga\/([a-z0-9-]+)"[^>]{0,200}(?:alt|title)="([^"]{3,100})"/gi;
+  while ((m = linkAlt.exec(html)) !== null) {
+    titleMap[m[1]] = m[2].trim();
+  }
+  // og-style near card: text after slug
+  for (const it of items) {
+    if (titleMap[it.url]) it.title = titleMap[it.url];
+  }
+
+  return items.slice(0, 48);
 }
 
 async function fmDetail(slug: string) {
