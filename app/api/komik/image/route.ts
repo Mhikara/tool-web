@@ -3,20 +3,19 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-function hostAllowed(hostname: string): boolean {
-  const h = hostname.toLowerCase();
-  if (
-    h === "img.fullmanhwa.com" ||
-    h.endsWith(".fullmanhwa.com") ||
+function allowed(host: string) {
+  const h = host.toLowerCase();
+  return (
+    h.includes("fullmanhwa") ||
     h.includes("manhwabuddy") ||
     h.includes("mgread") ||
+    h.includes("komiku") ||
+    h.includes("mangadex") ||
+    h.includes("mangadex.network") ||
     /^imgsrv\d*\.com$/.test(h) ||
     h.includes("mangaraw") ||
     h.includes("fastcdn")
-  ) {
-    return true;
-  }
-  return false;
+  );
 }
 
 export async function GET(req: NextRequest) {
@@ -24,38 +23,20 @@ export async function GET(req: NextRequest) {
     const raw = req.nextUrl.searchParams.get("url") || "";
     if (!raw) return NextResponse.json({ error: "url wajib" }, { status: 400 });
     const target = new URL(raw);
-    if (!hostAllowed(target.hostname)) {
-      return NextResponse.json(
-        { error: "host tidak diizinkan: " + target.hostname },
-        { status: 403 }
-      );
+    if (!allowed(target.hostname)) {
+      return NextResponse.json({ error: "host diblokir: " + target.hostname }, { status: 403 });
     }
-    const referer = "https://fullmanhwa.com/";
-    let res = await fetch(target.toString(), {
+    const res = await fetch(target.toString(), {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         Accept: "image/avif,image/webp,image/*,*/*;q=0.8",
-        Referer: referer,
-        Origin: "https://fullmanhwa.com",
+        Referer: "https://fullmanhwa.com/",
       },
       redirect: "follow",
     });
-    if (res.status === 403) {
-      res = await fetch(target.toString(), {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          Accept: "image/*",
-          Referer: "https://www.google.com/",
-        },
-      });
-    }
     if (!res.ok) {
-      return NextResponse.json(
-        { error: "upstream " + res.status, host: target.hostname },
-        { status: 502 }
-      );
+      return NextResponse.json({ error: "upstream " + res.status }, { status: 502 });
     }
     const buf = await res.arrayBuffer();
     return new NextResponse(buf, {

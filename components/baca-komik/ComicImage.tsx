@@ -1,47 +1,64 @@
 "use client";
 
 import { useState } from "react";
-import { RefreshCw } from "lucide-react";
 
-type Props = {
+export default function ComicImage({
+  src,
+  alt,
+  index,
+}: {
   src: string;
   alt?: string;
-  className?: string;
-};
-
-export default function ComicImage({ src, alt = "", className = "" }: Props) {
+  index: number;
+}) {
   const [err, setErr] = useState(false);
-  const [key, setKey] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  // Pastikan lewat proxy jika URL eksternal
+  const finalSrc =
+    src.startsWith("/api/komik/image") || src.startsWith("data:")
+      ? src
+      : src.startsWith("http")
+        ? "/api/komik/image?url=" + encodeURIComponent(src)
+        : src;
 
   if (err) {
     return (
-      <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 bg-zinc-900 py-10">
-        <p className="text-sm text-zinc-400">Gambar gagal dimuat</p>
+      <div className="mx-auto flex min-h-[120px] max-w-3xl flex-col items-center justify-center gap-2 bg-zinc-900/50 py-8 text-sm text-zinc-500">
+        <span>Gambar {index + 1} gagal dimuat</span>
         <button
           type="button"
+          className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white"
           onClick={() => {
             setErr(false);
-            setKey((k) => k + 1);
+            setLoading(true);
           }}
-          className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-bold text-white"
         >
-          <RefreshCw className="h-4 w-4" /> Muat ulang gambar
+          Muat ulang
         </button>
       </div>
     );
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      key={key}
-      src={src}
-      alt={alt}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setErr(true)}
-      className={className || "mx-auto block w-full bg-zinc-900"}
-      draggable={false}
-    />
+    <div className="relative mx-auto w-full max-w-3xl">
+      {loading && (
+        <div className="absolute inset-0 animate-pulse bg-zinc-800/40" />
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={finalSrc}
+        alt={alt || `Halaman ${index + 1}`}
+        loading={index < 2 ? "eager" : "lazy"}
+        referrerPolicy="no-referrer"
+        decoding="async"
+        className="mx-auto block w-full bg-black/20"
+        onLoad={() => setLoading(false)}
+        onError={() => {
+          setLoading(false);
+          setErr(true);
+        }}
+      />
+    </div>
   );
 }
