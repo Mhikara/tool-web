@@ -16,7 +16,6 @@ function hostAllowed(hostname: string): boolean {
   ) {
     return true;
   }
-  if (h.includes("komiku")) return true;
   return false;
 }
 
