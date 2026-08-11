@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
-import { Github, Rocket, Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { GitBranch, Rocket, Upload, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 
 type OutFile = { path: string; content: string; encoding: "utf-8" | "base64" };
 
@@ -102,7 +102,7 @@ export default function UploadZipPage() {
     return (file.size / 1024).toFixed(1) + " KB · " + files.length + " file";
   }, [file, files.length]);
 
-  async function deployGithub() {
+  async function deployGitBranch() {
     if (!files.length) return setLog("Pilih ZIP dulu");
     setBusy(true);
     setResult(null);
@@ -193,7 +193,7 @@ export default function UploadZipPage() {
               (tab === "github" ? "bg-violet-600 text-white" : "bg-zinc-900 text-zinc-400")
             }
           >
-            <Github className="h-4 w-4" /> GitHub
+            <GitBranch className="h-4 w-4" /> GitHub
           </button>
           <button
             type="button"
@@ -259,10 +259,10 @@ export default function UploadZipPage() {
             <button
               type="button"
               disabled={busy}
-              onClick={deployGithub}
+              onClick={deployGitBranch}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 py-3 text-sm font-bold disabled:opacity-50"
             >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Github className="h-4 w-4" />}
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitBranch className="h-4 w-4" />}
               Unggah ke GitHub
             </button>
           </div>
