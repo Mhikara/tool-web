@@ -18,24 +18,17 @@ const PROJ = "ma_projects_v1";
 
 export function loadKeys(): ApiKeyEntry[] {
   if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(localStorage.getItem(KEYS) || "[]");
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(KEYS) || "[]"); } catch { return []; }
 }
-
 export function saveKeys(list: ApiKeyEntry[]) {
   localStorage.setItem(KEYS, JSON.stringify(list));
 }
-
 export function nextKey(list: ApiKeyEntry[]): ApiKeyEntry | null {
   const active = list.filter((k) => k.key && !k.disabled);
   if (!active.length) return null;
   active.sort((a, b) => (a.failCount || 0) - (b.failCount || 0));
   return active[0];
 }
-
 export function markFail(id: string) {
   const list = loadKeys();
   const i = list.findIndex((k) => k.id === id);
@@ -44,7 +37,6 @@ export function markFail(id: string) {
   if ((list[i].failCount || 0) >= 3) list[i].disabled = true;
   saveKeys(list);
 }
-
 export function markOk(id: string) {
   const list = loadKeys();
   const i = list.findIndex((k) => k.id === id);
@@ -55,19 +47,12 @@ export function markOk(id: string) {
 }
 
 export type MemoryItem = { id: string; text: string; at: number };
-
 export function loadMemory(): MemoryItem[] {
-  try {
-    return JSON.parse(localStorage.getItem(MEM) || "[]");
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(MEM) || "[]"); } catch { return []; }
 }
-
 export function saveMemory(items: MemoryItem[]) {
   localStorage.setItem(MEM, JSON.stringify(items.slice(-40)));
 }
-
 export function addMemory(text: string) {
   const items = loadMemory();
   items.push({ id: String(Date.now()), text: text.slice(0, 800), at: Date.now() });
@@ -75,41 +60,19 @@ export function addMemory(text: string) {
 }
 
 export type HistMsg = {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  agent?: string;
-  at: number;
+  id: string; role: "user" | "assistant" | "system"; content: string; agent?: string; at: number;
 };
-
 export function loadHistory(): HistMsg[] {
-  try {
-    return JSON.parse(localStorage.getItem(HIST) || "[]");
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(HIST) || "[]"); } catch { return []; }
 }
-
 export function saveHistory(msgs: HistMsg[]) {
   localStorage.setItem(HIST, JSON.stringify(msgs.slice(-80)));
 }
 
-export type Project = {
-  id: string;
-  name: string;
-  goal: string;
-  notes: string;
-  updatedAt: number;
-};
-
+export type Project = { id: string; name: string; goal: string; notes: string; updatedAt: number };
 export function loadProjects(): Project[] {
-  try {
-    return JSON.parse(localStorage.getItem(PROJ) || "[]");
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(PROJ) || "[]"); } catch { return []; }
 }
-
 export function saveProjects(list: Project[]) {
   localStorage.setItem(PROJ, JSON.stringify(list.slice(-30)));
 }
