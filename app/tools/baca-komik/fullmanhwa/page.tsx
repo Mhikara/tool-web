@@ -8,7 +8,7 @@ export default function FullManhwaProxyPage() {
   const [path, setPath] = useState("/");
   const [input, setInput] = useState("/");
   const [showImages, setShowImages] = useState(false);
-  const [proxyUrl, setProxyUrl] = useState("/api/fullmanhwa?path=%2F");
+  const [iframeSrc, setIframeSrc] = useState("/api/fullmanhwa?path=%2F");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -20,36 +20,34 @@ export default function FullManhwaProxyPage() {
   }, []);
 
   useEffect(() => {
-    setProxyUrl(`/api/fullmanhwa?path=${encodeURIComponent(path)}&img=${showImages}`);
+    setIframeSrc("/api/fullmanhwa?path=" + encodeURIComponent(path) + "&img=" + showImages);
   }, [path, showImages]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPath(input);
-    window.history.replaceState(null, "", `?path=${encodeURIComponent(input)}`);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "?path=" + encodeURIComponent(input));
+    }
   };
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      {/* Navbar */}
       <div className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-3">
           <Link href="/tools/baca-komik" className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300">
             <ArrowLeft className="h-4 w-4" />
           </Link>
-          <span className="font-bold tracking-tight">FullMan4 w-4" />
-          </Link>
           <span className="font-bold tracking-tight">FullManhwa Clean</span>
           <div className="ml-auto flex items-center gap-2">
             <button
-              onClick={() => setShowImages(!showImages)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-800"
             >
               {showImages ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               {showImages ? "Sembunyi Gambar" : "Tampil Gambar"}
             </button>
             <a
-              href={`https://fullmanhwa.com${path}`}
+              href={"https://fullmanhwa.com" + path}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-500"
@@ -76,11 +74,10 @@ export default function FullManhwaProxyPage() {
         </div>
       </div>
 
-      {/* Content */}
       <main className="mx-auto max-w-6xl">
         <iframe
-          key={proxyUrl}
-          src={proxyUrl}
+          key={iframeSrc}
+          src={iframeSrc}
           className="min-h-[85vh] w-full border-0 bg-zinc-950"
           sandbox="allow-same-origin allow-scripts allow-forms"
           title="FullManhwa Clean Reader"
