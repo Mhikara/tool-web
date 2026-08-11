@@ -1,15 +1,12 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Eye, EyeOff } from "lucide-react";
-
 export default function FullManhwaProxyPage() {
   const [path, setPath] = useState("/");
   const [input, setInput] = useState("/");
   const [showImages, setShowImages] = useState(false);
   const [iframeSrc, setIframeSrc] = useState("/api/fullmanhwa?path=%2F");
-
   useEffect(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
@@ -18,11 +15,9 @@ export default function FullManhwaProxyPage() {
       setInput(p);
     }
   }, []);
-
   useEffect(() => {
     setIframeSrc("/api/fullmanhwa?path=" + encodeURIComponent(path) + "&img=" + showImages);
   }, [path, showImages]);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPath(input);
@@ -30,7 +25,6 @@ export default function FullManhwaProxyPage() {
       window.history.replaceState(null, "", "?path=" + encodeURIComponent(input));
     }
   };
-
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur-md">
@@ -74,7 +68,6 @@ export default function FullManhwaProxyPage() {
           </form>
         </div>
       </div>
-
       <main className="mx-auto max-w-6xl">
         <iframe
           key={iframeSrc}
