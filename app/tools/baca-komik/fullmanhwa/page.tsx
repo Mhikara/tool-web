@@ -41,6 +41,7 @@ export default function FullManhwaProxyPage() {
           <span className="font-bold tracking-tight">FullManhwa Clean</span>
           <div className="ml-auto flex items-center gap-2">
             <button
+              onClick={() => setShowImages(!showImages)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-800"
             >
               {showImages ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
