@@ -783,10 +783,11 @@ async function kmDetail(slug: string) {
   const chapters: any[] = [];
   const seen = new Set<string>();
   // /slug-chapter-N/
+    const safeSlug = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const re = new RegExp(
-    'href="(?:https?:\\/\\/komiku\\.org)?\\/(' +
-      slug.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&") +
-      "-chapter-[0-9.]+)\\/?"',
+    "href=\\\"(?:https?:\\\\/\\\\/komiku\\\\.org)?\\\\/(" +
+      safeSlug +
+      "-chapter-[0-9.]+)\\\\/?",
     "gi"
   );
   let m: RegExpExecArray | null;
