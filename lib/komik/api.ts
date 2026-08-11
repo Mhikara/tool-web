@@ -74,3 +74,11 @@ export async function fetchChapter(chapterId: string) {
     "/api/komik?action=read&chapterId=" + encodeURIComponent(chapterId)
   );
 }
+
+export function getFullManhwaProxyUrl(path: string): string {
+  return "/tools/baca-komik/fullmanhwa?path=" + encodeURIComponent(path);
+}
+
+export function getFullManhwaProxyUrl(path: string): string {
+  return "/tools/baca-komik/fullmanhwa?path=" + encodeURIComponent(path);
+}

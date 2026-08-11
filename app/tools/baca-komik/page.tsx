@@ -215,6 +215,18 @@ export default function BacaKomikCatalogPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-3 py-4 sm:px-4">
+        {/* FullManhwa Clean Mode Banner */}
+        <div className="mb-4 rounded-xl border border-violet-800/40 bg-gradient-to-r from-violet-900/30 to-zinc-900 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="font-bold text-white">FullManhwa — Mode Bersih</h3>
+              <p className="text-xs text-zinc-400">Baca tanpa iklan & tanpa gambar (hemat data). Toggle ON jika ingin lihat gambar chapter.</p>
+            </div>
+            <Link href="/tools/baca-komik/fullmanhwa" className="shrink-0 rounded-lg bg-violet-600 px-4 py-2 text-center text-xs font-bold text-white hover:bg-violet-500">
+              Buka Mode Bersih
+            </Link>
+          </div>
+        </div>
         <div className="mb-4 flex gap-2">
           <button
             type="button"
