@@ -974,7 +974,33 @@ if (action === "home") {
         }
       }
 
-      const mangaId = parsed.key;
+      
+      if (parsed.source === "komiku") {
+        try {
+          const detail = await kmDetail(parsed.key);
+          return NextResponse.json(detail);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Gagal detail Komiku";
+          return NextResponse.json({ error: message }, { status: 502 });
+        }
+      }
+
+      if (parsed.source === "mgread") {
+        try {
+          // optional: jika mgrDetail ada
+          if (typeof mgrDetail === "function") {
+            const detail = await mgrDetail(parsed.key);
+            return NextResponse.json(detail);
+          }
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Gagal detail Mgread";
+          return NextResponse.json({ error: message }, { status: 502 });
+        }
+      }
+
+const mangaId = parsed.key;
       const infoUrl = new URL(`${MD}/manga/${mangaId}`);
       infoUrl.searchParams.append("includes[]", "cover_art");
 
@@ -1050,6 +1076,20 @@ if (action === "home") {
     }
 
     if (action === "read") {
+      const rawChapter = chapterId || id || "";
+      if (rawChapter.startsWith("km:") || (parseId(rawChapter).source === "komiku")) {
+        try {
+          const path = rawChapter.replace(/^km:/, "");
+          const data = await kmRead(path);
+          return NextResponse.json(data);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "Gagal baca Komiku";
+          return NextResponse.json({ error: message }, { status: 502 });
+        }
+      }
+
+
       const raw = chapterId || id || sp.get("url") || "";
 
       if (raw.startsWith("fm:")) {
