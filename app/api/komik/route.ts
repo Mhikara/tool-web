@@ -783,45 +783,41 @@ async function kmDetail(slug: string) {
     slug.replace(/-/g, " ");
 
   const coverRaw =
-    html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
-    null;
-  const cover =
-    typeof kmProxy === "function"
-      ? kmProxy(coverRaw)
-      : coverRaw
-        ? "/api/komik/image?url=" + encodeURIComponent(coverRaw)
-        : null;
+    html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] || null;
 
-  const chapters: Array<{
-    id: string;
-    title: string;
-    url: string;
-    number: number;
-  }> = [];
+  // Sinopsis
+  let synopsis =
+    html.match(/property=["']og:description["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    html.match(/<div[^>]*class="[^"]*desc[^"]*"[^>]*>([\s\S]*?)<\/div>/i)?.[1] ||
+    "";
+  synopsis = synopsis.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 800);
+
+  const chapters: Array<{ id: string; title: string; url: string; number: number }> = [];
   const seen = new Set<string>();
-
-  // Semua link *-chapter-N/ di halaman detail (slug chapter bisa beda dari slug manga)
-  const re =
-    /href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/([a-z0-9-]+-chapter-([0-9]+(?:\.[0-9]+)?))\/?"/gi;
+  // JANGAN paksa prefix = slug manga
+  const re = /href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/([a-z0-9-]+-chapter-([0-9]+(?:\.[0-9]+)?))\/?"/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
     const path = m[1].toLowerCase();
-    const num = m[2];
     if (seen.has(path)) continue;
     seen.add(path);
     chapters.push({
       id: "km:" + path,
-      title: "Ch. " + num,
+      title: "Ch. " + m[2],
       url: "km:" + path,
-      number: parseFloat(num) || 0,
+      number: parseFloat(m[2]) || 0,
     });
   }
-
   chapters.sort((a, b) => a.number - b.number);
+
+  const cover = coverRaw
+    ? (typeof kmProxy === "function" ? kmProxy(coverRaw) : "/api/komik/image?url=" + encodeURIComponent(coverRaw))
+    : null;
 
   return {
     title: title.replace(/\s*[-|].*$/, "").trim(),
     cover,
+    synopsis,
     colorLabel: "Bergambar",
     statusLabel: "Ongoing",
     source: "komiku",
