@@ -727,29 +727,38 @@ async function kmDetail(slug: string) {
   const got = await kmFetch("/manga/" + slug + "/");
   if (!got.ok) throw new Error("Komiku detail gagal");
   const html = got.text;
+
   const title =
     html.match(/property=["']og:title["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    html.match(/<h1[^>]*>([^<]+)<\/h1>/i)?.[1] ||
     slug.replace(/-/g, " ");
+
   const cover =
     html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
     null;
 
-  const chapters: any[] = [];
+  const chapters: Array<{
+    id: string;
+    title: string;
+    url: string;
+    number: number;
+  }> = [];
   const seen = new Set<string>();
-  // /slug-chapter-N/
-    const safeSlug = slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  // Format Komiku: /slug-chapter-12/ atau slug-chapter-12.5
   const re = new RegExp(
-    "href=\\\"(?:https?:\\\\/\\\\/komiku\\\\.org)?\\\\/(" +
-      safeSlug +
-      "-chapter-[0-9.]+)\\\\/?",
+    String.raw`href="(?:https?:\/\/komiku\.org)?\/(` +
+      slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+      String.raw`-chapter-([0-9]+(?:\.[0-9]+)?))\/?"`,
     "gi"
   );
+
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
     const path = m[1].toLowerCase();
+    const num = m[2];
     if (seen.has(path)) continue;
     seen.add(path);
-    const num = path.match(/chapter-([0-9.]+)/)?.[1] || "?";
     chapters.push({
       id: "km:" + path,
       title: "Ch. " + num,
@@ -757,11 +766,30 @@ async function kmDetail(slug: string) {
       number: parseFloat(num) || 0,
     });
   }
+
+  // Fallback: semua link chapter di halaman
+  if (chapters.length === 0) {
+    const re2 = /href="(?:https?:\/\/komiku\.org)?\/([a-z0-9-]+-chapter-[0-9]+(?:\.[0-9]+)?)\/?"/gi;
+    while ((m = re2.exec(html)) !== null) {
+      const path = m[1].toLowerCase();
+      if (!path.includes(slug.toLowerCase())) continue;
+      if (seen.has(path)) continue;
+      seen.add(path);
+      const num = path.match(/chapter-([0-9.]+)/)?.[1] || "?";
+      chapters.push({
+        id: "km:" + path,
+        title: "Ch. " + num,
+        url: "km:" + path,
+        number: parseFloat(num) || 0,
+      });
+    }
+  }
+
   chapters.sort((a, b) => a.number - b.number);
 
   return {
     title: title.replace(/\s*[-|].*$/, "").trim(),
-    cover: kmProxy(cover),
+    cover: typeof kmProxy === "function" ? kmProxy(cover) : cover,
     colorLabel: "Bergambar",
     statusLabel: "Ongoing",
     source: "komiku",
