@@ -4,54 +4,56 @@ import Link from "next/link";
 import type { ComicItem } from "../../lib/komik/api";
 
 export default function ComicCard({ item }: { item: ComicItem }) {
-  const type = item.typeLabel || "KOMIK";
+  const type = (item.typeLabel || "KOMIK").toUpperCase();
   const badge =
-    type === "MANHWA"
-      ? "bg-sky-600"
-      : type === "MANGA"
-        ? "bg-emerald-600"
-        : type === "MANHUA"
-          ? "bg-fuchsia-600"
-          : "bg-zinc-600";
+    type.includes("MANHWA")
+      ? "bg-sky-500/90"
+      : type.includes("MANGA")
+        ? "bg-emerald-500/90"
+        : type.includes("MANHUA")
+          ? "bg-fuchsia-500/90"
+          : "bg-zinc-600/90";
+
+  const cover =
+    item.cover && item.cover.startsWith("http")
+      ? "/api/komik/image?url=" + encodeURIComponent(item.cover)
+      : item.cover;
 
   return (
     <Link
       href={"/tools/baca-komik/" + encodeURIComponent(item.id)}
-      className="group overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/70 shadow-lg transition hover:-translate-y-0.5 hover:border-violet-500/50"
+      className="group block overflow-hidden rounded-2xl bg-zinc-900/40 ring-1 ring-white/5 transition hover:ring-violet-500/40"
     >
-      <div className="relative aspect-[3/4] bg-zinc-800">
-        {item.cover ? (
+      <div className="relative aspect-[3/4] overflow-hidden bg-zinc-800/80">
+        {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={item.cover}
+            src={cover}
             alt={item.title}
             loading="lazy"
             referrerPolicy="no-referrer"
-            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-3xl">📖</div>
+          <div className="flex h-full items-center justify-center text-2xl opacity-40">
+            📖
+          </div>
         )}
         <span
           className={
-            "absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase text-white " +
+            "absolute left-2 top-2 rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-white " +
             badge
           }
         >
           {type}
         </span>
-        {item.statusLabel && (
-          <span className="absolute bottom-2 left-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] text-zinc-200">
-            {item.statusLabel}
-          </span>
-        )}
       </div>
-      <div className="space-y-1 p-2.5">
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-zinc-100">
+      <div className="space-y-0.5 p-2.5">
+        <h3 className="line-clamp-2 text-[13px] font-semibold leading-snug text-zinc-100">
           {item.title}
         </h3>
-        <p className="text-[11px] text-zinc-500">
-          {item.colorLabel || item.source || "Komik"}
+        <p className="truncate text-[11px] text-zinc-500">
+          {item.statusLabel || item.source || "Komik"}
         </p>
       </div>
     </Link>
