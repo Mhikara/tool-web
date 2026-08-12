@@ -693,34 +693,48 @@ async function kmList() {
 
 async function kmSearch(q: string) {
   try {
-    const got = await kmFetch("/?post_type=manga&s=" + encodeURIComponent(q));
-    if (!got.ok) return [];
-    // reuse parser sederhana
-    const html = got.text;
-    const items: any[] = [];
-    const seen = new Set<string>();
-    const re = /href="(?:https?:\/\/komiku\.org)?\/manga\/([a-z0-9-]+)\/?"/gi;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(html)) !== null) {
-      const slug = m[1];
-      if (seen.has(slug) || slug === "page") continue;
-      seen.add(slug);
-      items.push({
-        id: "km:" + slug,
-        source: "komiku",
-        title: slug.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
-        url: slug,
-        cover: null,
-        colored: true,
-        colorLabel: "Bergambar",
-        statusLabel: "Ongoing",
-        external: KM + "/manga/" + slug + "/",
-      });
+    const query = (q || "").trim();
+    if (!query) return [];
+    // api.komiku.org mengembalikan hasil search lebih andal
+    const got = await kmFetch(
+      "https://api.komiku.org/?post_type=manga&s=" + encodeURIComponent(query)
+    );
+    if (!got.ok) {
+      const got2 = await kmFetch(
+        "/?post_type=manga&s=" + encodeURIComponent(query)
+      );
+      if (!got2.ok) return [];
+      return parseKmSearchHtml(got2.text);
     }
-    return items.slice(0, 30);
+    return parseKmSearchHtml(got.text);
   } catch {
     return [];
   }
+}
+
+function parseKmSearchHtml(html: string) {
+  const items: any[] = [];
+  const seen = new Set<string>();
+  const re = /href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/manga\/([a-z0-9-]+)\/?"/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const slug = m[1];
+    if (seen.has(slug) || slug === "page") continue;
+    seen.add(slug);
+    items.push({
+      id: "km:" + slug,
+      source: "komiku",
+      title: slug.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+      url: slug,
+      cover: null,
+      colored: true,
+      colorLabel: "Bergambar",
+      statusLabel: "Ongoing",
+      typeLabel: "KOMIK",
+      external: "https://komiku.org/manga/" + slug + "/",
+    });
+  }
+  return items.slice(0, 30);
 }
 
 async function kmDetail(slug: string) {
@@ -933,6 +947,19 @@ if (action === "home") {
           };
           list.push(...(json.data || []).map(mapMd));
         }
+      }
+
+
+      if ((source === "all" || source === "komiku") && q.trim()) {
+        try {
+          list.push(...(await kmSearch(q.trim())));
+        } catch {}
+      }
+
+      if ((source === "all" || source === "fullmanhwa") && q.trim() && typeof fmSearch === "function") {
+        try {
+          list.push(...(await fmSearch(q.trim())));
+        } catch {}
       }
 
       return NextResponse.json({ list });
