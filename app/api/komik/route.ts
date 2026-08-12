@@ -128,28 +128,35 @@ function mapMd(manga: {
   };
 }
 
-async function mdList(orderKey: string, limit: number, genre: string = "", typeFilter: string = "all") {
+async function mdList(
+  orderKey: string,
+  limit: number,
+  genre: string = "",
+  typeFilter: string = "all",
+  demographic: string = "all"
+) {
   const url = new URL(`${MD}/manga`);
   url.searchParams.set("limit", String(limit));
   url.searchParams.set(`order[${orderKey}]`, "desc");
   url.searchParams.append("availableTranslatedLanguage[]", "id");
+  url.searchParams.append("availableTranslatedLanguage[]", "en");
   url.searchParams.append("includes[]", "cover_art");
-      if (genre) {
-        url.searchParams.append("includedTags[]", genre);
-        url.searchParams.set("includedTagsMode", "AND");
-      }
-      if (typeFilter === "manhwa") {
-        url.searchParams.append("originalLanguage[]", "ko");
-      } else if (typeFilter === "manhua") {
-        url.searchParams.append("originalLanguage[]", "zh");
-        url.searchParams.append("originalLanguage[]", "zh-hk");
-      } else if (typeFilter === "manga") {
-        url.searchParams.append("originalLanguage[]", "ja");
-      if (demographic && demographic !== "all") {
-        url.searchParams.append("publicationDemographic[]", demographic);
-      }
 
-      }
+  if (genre) {
+    url.searchParams.append("includedTags[]", genre);
+    url.searchParams.set("includedTagsMode", "AND");
+  }
+  if (typeFilter === "manhwa") {
+    url.searchParams.append("originalLanguage[]", "ko");
+  } else if (typeFilter === "manhua") {
+    url.searchParams.append("originalLanguage[]", "zh");
+    url.searchParams.append("originalLanguage[]", "zh-hk");
+  } else if (typeFilter === "manga") {
+    url.searchParams.append("originalLanguage[]", "ja");
+  }
+  if (demographic && demographic !== "all") {
+    url.searchParams.append("publicationDemographic[]", demographic);
+  }
 
   url.searchParams.append("contentRating[]", "safe");
   url.searchParams.append("contentRating[]", "suggestive");
@@ -160,12 +167,10 @@ async function mdList(orderKey: string, limit: number, genre: string = "", typeF
     next: { revalidate: 180 },
   });
   if (!res.ok) return [];
-
-  const json = (await res.json()) as {
-    data?: Array<Parameters<typeof mapMd>[0]>;
-  };
+  const json = (await res.json()) as { data?: any[] };
   return (json.data || []).map(mapMd);
 }
+
 
 type OmegaSeries = {
   id?: number;
@@ -825,7 +830,7 @@ export async function GET(req: NextRequest) {
     try {
       const bag: any[] = [];
       const tasks: Promise<any[]>[] = [];
-      if (typeof mdList === "function") tasks.push(mdList({ limit: 30 }).catch(() => []));
+      if (typeof mdList === "function") tasks.push(mdList("followedCount", 24, "", "all", "all").catch(() => []));
       if (typeof fmList === "function") tasks.push(fmList().catch(() => []));
       if (typeof kmList === "function") tasks.push(kmList().catch(() => []));
       const settled = await Promise.all(tasks);
@@ -842,7 +847,7 @@ export async function GET(req: NextRequest) {
 
 if (action === "home") {
       const tasks: Promise<unknown[]>[] = [];
-      tasks.push(source === "all" || source === "mangadex" ? mdList("latestUploadedChapter", 12, genre, typeFilter) : Promise.resolve([]));
+      tasks.push(source === "all" || source === "mangadex" ? mdList("latestUploadedChapter", 12, genre, typeFilter, demographic) : Promise.resolve([]));
       tasks.push(source === "all" || source === "omega" ? omegaList("latest", 12) : Promise.resolve([]));
       tasks.push(source === "all" || source === "fullmanhwa" ? fmList() : Promise.resolve([]));
 
@@ -853,8 +858,8 @@ if (action === "home") {
       let topRated: unknown[] = [];
       if (source === "all" || source === "mangadex") {
         const [p, r] = await Promise.all([
-          mdList("followedCount", 12, genre, typeFilter),
-          mdList("rating", 12, genre, typeFilter),
+          mdList("followedCount", 12, genre, typeFilter, demographic),
+          mdList("rating", 12, genre, typeFilter, demographic),
         ]);
         popular = p;
         topRated = r;

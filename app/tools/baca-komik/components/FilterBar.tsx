@@ -2,28 +2,12 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
-import { mergeQuery } from "../../../../lib/komik/filterParams";
-
-const DEMOGRAPHICS = [
-  { id: "all", label: "Semua demografi" },
-  { id: "shounen", label: "Shounen" },
-  { id: "shoujo", label: "Shoujo" },
-  { id: "seinen", label: "Seinen" },
-  { id: "josei", label: "Josei" },
-] as const;
-
-const TYPES = [
-  { id: "all", label: "Semua tipe" },
-  { id: "manhwa", label: "Manhwa" },
-  { id: "manhua", label: "Manhua" },
-  { id: "manga", label: "Manga" },
-] as const;
-
-const STATUSES = [
-  { id: "all", label: "Semua status" },
-  { id: "ongoing", label: "Ongoing" },
-  { id: "completed", label: "Tamat" },
-] as const;
+import {
+  mergeQuery,
+  GENRE_OPTS,
+  TYPE_OPTS,
+  DEMO_OPTS,
+} from "../../../../lib/komik/filterParams";
 
 function Chip({
   active,
@@ -63,17 +47,17 @@ export default function FilterBar() {
 
   const type = searchParams.get("type") || "all";
   const demographic = searchParams.get("demographic") || "all";
-  const status = searchParams.get("status") || "all";
+  const genre = searchParams.get("genre") || "";
   const source = searchParams.get("source") || "all";
 
   return (
     <div className="space-y-2">
       <div className="flex gap-2 overflow-x-auto pb-1">
         {[
-          ["all", "Semua sumber"],
-          ["omega", "Manhwa 18+"],
-          ["fullmanhwa", "FullManhwa"],
+          ["all", "Semua"],
           ["mangadex", "MangaDex"],
+          ["fullmanhwa", "FullManhwa"],
+          ["komiku", "Komiku"],
         ].map(([id, label]) => (
           <Chip
             key={id}
@@ -84,36 +68,41 @@ export default function FilterBar() {
           </Chip>
         ))}
       </div>
+
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {TYPES.map((t) => (
+        {TYPE_OPTS.map((t) => (
           <Chip
             key={t.id}
             active={type === t.id}
-            onClick={() => setFilter({ type: t.id })}
+            onClick={() => setFilter({ type: t.id === "all" ? null : t.id })}
           >
             {t.label}
           </Chip>
         ))}
       </div>
+
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {DEMOGRAPHICS.map((d) => (
+        {DEMO_OPTS.map((d) => (
           <Chip
             key={d.id}
             active={demographic === d.id}
-            onClick={() => setFilter({ demographic: d.id })}
+            onClick={() =>
+              setFilter({ demographic: d.id === "all" ? null : d.id })
+            }
           >
             {d.label}
           </Chip>
         ))}
       </div>
+
       <div className="flex gap-2 overflow-x-auto pb-1">
-        {STATUSES.map((s) => (
+        {GENRE_OPTS.map((g) => (
           <Chip
-            key={s.id}
-            active={status === s.id}
-            onClick={() => setFilter({ status: s.id })}
+            key={g.id || "all"}
+            active={genre === g.id}
+            onClick={() => setFilter({ genre: g.id || null })}
           >
-            {s.label}
+            {g.label}
           </Chip>
         ))}
       </div>

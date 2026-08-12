@@ -400,6 +400,10 @@ export default function BacaKomikCatalogPage() {
           </p>
         )}
       </main>
-    </div>
+    
+      <footer className="mt-10 border-t border-zinc-800 py-6 text-center text-xs text-zinc-500">
+        Baca Komik · Developer by <span className="font-semibold text-violet-400">Meydi</span>
+      </footer>
+</div>
   );
 }
