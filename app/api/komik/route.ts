@@ -695,18 +695,19 @@ async function kmSearch(q: string) {
   try {
     const query = (q || "").trim();
     if (!query) return [];
-    // api.komiku.org mengembalikan hasil search lebih andal
-    const got = await kmFetch(
+    let html = "";
+    const a = await kmFetch(
       "https://api.komiku.org/?post_type=manga&s=" + encodeURIComponent(query)
     );
-    if (!got.ok) {
-      const got2 = await kmFetch(
+    if (a.ok && a.text.length > 500) html = a.text;
+    else {
+      const b = await kmFetch(
         "/?post_type=manga&s=" + encodeURIComponent(query)
       );
-      if (!got2.ok) return [];
-      return parseKmSearchHtml(got2.text);
+      if (b.ok) html = b.text;
     }
-    return parseKmSearchHtml(got.text);
+    if (!html) return [];
+    return parseKmSearchHtml(html);
   } catch {
     return [];
   }
@@ -715,9 +716,33 @@ async function kmSearch(q: string) {
 function parseKmSearchHtml(html: string) {
   const items: any[] = [];
   const seen = new Set<string>();
-  const re = /href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/manga\/([a-z0-9-]+)\/?"/gi;
+
+  // img dekat link manga
+  const rePair =
+    /href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/manga\/([a-z0-9-]+)\/?"[\s\S]{0,500}?src="(https:\/\/(?:thumbnail|img)\.komiku\.org\/[^"]+)"/gi;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) !== null) {
+  while ((m = rePair.exec(html)) !== null) {
+    const slug = m[1];
+    if (seen.has(slug) || slug === "page") continue;
+    seen.add(slug);
+    let cover = m[2].replace(/&amp;/g, "&").replace(/&#038;/g, "&");
+    items.push({
+      id: "km:" + slug,
+      source: "komiku",
+      title: slug.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+      url: slug,
+      cover: typeof kmProxy === "function" ? kmProxy(cover) : "/api/komik/image?url=" + encodeURIComponent(cover),
+      colored: true,
+      colorLabel: "Bergambar",
+      statusLabel: "Ongoing",
+      typeLabel: "KOMIK",
+      external: "https://komiku.org/manga/" + slug + "/",
+    });
+  }
+
+  // fallback tanpa cover
+  const re2 = /href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/manga\/([a-z0-9-]+)\/?"/gi;
+  while ((m = re2.exec(html)) !== null) {
     const slug = m[1];
     if (seen.has(slug) || slug === "page") continue;
     seen.add(slug);
@@ -734,6 +759,16 @@ function parseKmSearchHtml(html: string) {
       external: "https://komiku.org/manga/" + slug + "/",
     });
   }
+
+  // judul dari alt
+  const titleMap: Record<string, string> = {};
+  const altRe =
+    /(?:alt|title)="([^"]{3,120})"[^>]{0,200}href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/manga\/([a-z0-9-]+)/gi;
+  while ((m = altRe.exec(html)) !== null) titleMap[m[2]] = m[1].trim();
+  for (const it of items) {
+    if (titleMap[it.url]) it.title = titleMap[it.url];
+  }
+
   return items.slice(0, 30);
 }
 
@@ -747,9 +782,15 @@ async function kmDetail(slug: string) {
     html.match(/<h1[^>]*>([^<]+)<\/h1>/i)?.[1] ||
     slug.replace(/-/g, " ");
 
-  const cover =
+  const coverRaw =
     html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
     null;
+  const cover =
+    typeof kmProxy === "function"
+      ? kmProxy(coverRaw)
+      : coverRaw
+        ? "/api/komik/image?url=" + encodeURIComponent(coverRaw)
+        : null;
 
   const chapters: Array<{
     id: string;
@@ -759,14 +800,9 @@ async function kmDetail(slug: string) {
   }> = [];
   const seen = new Set<string>();
 
-  // Format Komiku: /slug-chapter-12/ atau slug-chapter-12.5
-  const re = new RegExp(
-    String.raw`href="(?:https?:\/\/komiku\.org)?\/(` +
-      slug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
-      String.raw`-chapter-([0-9]+(?:\.[0-9]+)?))\/?"`,
-    "gi"
-  );
-
+  // Semua link *-chapter-N/ di halaman detail (slug chapter bisa beda dari slug manga)
+  const re =
+    /href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/([a-z0-9-]+-chapter-([0-9]+(?:\.[0-9]+)?))\/?"/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
     const path = m[1].toLowerCase();
@@ -781,29 +817,11 @@ async function kmDetail(slug: string) {
     });
   }
 
-  // Fallback: semua link chapter di halaman
-  if (chapters.length === 0) {
-    const re2 = /href="(?:https?:\/\/komiku\.org)?\/([a-z0-9-]+-chapter-[0-9]+(?:\.[0-9]+)?)\/?"/gi;
-    while ((m = re2.exec(html)) !== null) {
-      const path = m[1].toLowerCase();
-      if (!path.includes(slug.toLowerCase())) continue;
-      if (seen.has(path)) continue;
-      seen.add(path);
-      const num = path.match(/chapter-([0-9.]+)/)?.[1] || "?";
-      chapters.push({
-        id: "km:" + path,
-        title: "Ch. " + num,
-        url: "km:" + path,
-        number: parseFloat(num) || 0,
-      });
-    }
-  }
-
   chapters.sort((a, b) => a.number - b.number);
 
   return {
     title: title.replace(/\s*[-|].*$/, "").trim(),
-    cover: typeof kmProxy === "function" ? kmProxy(cover) : cover,
+    cover,
     colorLabel: "Bergambar",
     statusLabel: "Ongoing",
     source: "komiku",
