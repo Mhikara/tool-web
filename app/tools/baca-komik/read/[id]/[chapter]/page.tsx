@@ -60,6 +60,7 @@ function ReaderInner() {
   }, [load]);
 
   // Reading history (standar useComicStorage)
+  // history sekali per chapter (hindari infinite loop)
   useEffect(() => {
     if (!data?.pages?.length) return;
     addHistory({
@@ -69,7 +70,10 @@ function ReaderInner() {
       chapterId,
       chapterTitle: data.title || chapterId,
     });
-  }, [data, comicId, chapterId, addHistory]);
+    // sengaja tidak memasukkan addHistory ke deps yang berubah tiap render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.pages?.length, comicId, chapterId]);
+
 
   const pages = data?.pages || [];
 

@@ -45,60 +45,53 @@ export function useComicStorage() {
     setReady(true);
   }, []);
 
-  const persistFav = useCallback((list: BookmarkItem[]) => {
-    setBookmarks(list);
-    localStorage.setItem(FAV_KEY, JSON.stringify(list));
-  }, []);
-
-  const persistHist = useCallback((list: HistoryItem[]) => {
-    setReadingHistory(list);
-    localStorage.setItem(HIST_KEY, JSON.stringify(list));
-  }, []);
-
   const isBookmarked = useCallback(
     (id: string) => bookmarks.some((b) => b.id === id),
     [bookmarks]
   );
 
-  const toggleBookmark = useCallback(
-    (item: Omit<BookmarkItem, "savedAt">) => {
-      const exists = bookmarks.some((b) => b.id === item.id);
+  const toggleBookmark = useCallback((item: Omit<BookmarkItem, "savedAt">) => {
+    setBookmarks((prev) => {
+      const exists = prev.some((b) => b.id === item.id);
       const next = exists
-        ? bookmarks.filter((b) => b.id !== item.id)
-        : [{ ...item, savedAt: Date.now() }, ...bookmarks];
-      persistFav(next);
-      return !exists;
-    },
-    [bookmarks, persistFav]
-  );
+        ? prev.filter((b) => b.id !== item.id)
+        : [{ ...item, savedAt: Date.now() }, ...prev];
+      localStorage.setItem(FAV_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
-  const removeBookmark = useCallback(
-    (id: string) => {
-      persistFav(bookmarks.filter((b) => b.id !== id));
-    },
-    [bookmarks, persistFav]
-  );
+  const removeBookmark = useCallback((id: string) => {
+    setBookmarks((prev) => {
+      const next = prev.filter((b) => b.id !== id);
+      localStorage.setItem(FAV_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
-  const addHistory = useCallback(
-    (entry: Omit<HistoryItem, "at">) => {
-      const filtered = readingHistory.filter(
+  // Stabil: tidak bergantung readingHistory → tidak loop
+  const addHistory = useCallback((entry: Omit<HistoryItem, "at">) => {
+    setReadingHistory((prev) => {
+      const filtered = prev.filter(
         (h) =>
           !(h.comicId === entry.comicId && h.chapterId === entry.chapterId)
       );
       const next = [{ ...entry, at: Date.now() }, ...filtered].slice(0, 100);
-      persistHist(next);
-    },
-    [readingHistory, persistHist]
-  );
+      localStorage.setItem(HIST_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
 
   const isChapterRead = useCallback(
-    (chapterId: string) => readingHistory.some((h) => h.chapterId === chapterId),
+    (chapterId: string) =>
+      readingHistory.some((h) => h.chapterId === chapterId),
     [readingHistory]
   );
 
   const clearHistory = useCallback(() => {
-    persistHist([]);
-  }, [persistHist]);
+    setReadingHistory([]);
+    localStorage.setItem(HIST_KEY, "[]");
+  }, []);
 
   return {
     ready,
