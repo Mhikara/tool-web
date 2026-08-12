@@ -1,21 +1,25 @@
 "use client";
-import { useState, useEffect } from "react";
-import { listDownloads, clearDownloads, type DownloadRecord } from "@/lib/localDownloadDb";
+
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  listDownloads,
+  clearDownloads,
+  type DownloadRecord,
+} from "@/lib/localDownloadDb";
 import { downloaderTools } from "@/lib/downloaderTools";
 import { makerTools } from "@/lib/makerTools";
 import { externalTools } from "@/lib/externalTools";
 import { toolsList } from "@/lib/toolsList";
 
-type TabKey = "all" | "downloader" | "maker" | "tools" | "vault" | "external";
+type TabKey = "all" | "downloader" | "maker" | "tools" | "external";
 
-const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: "all", label: "All", icon: "▦" },
-  { key: "downloader", label: "Downloader", icon: "⬇️" },
-  { key: "maker", label: "Maker", icon: "✨" },
-  { key: "tools", label: "Tools", icon: "🛠️" },
-  { key: "vault", label: "Vault", icon: "🗄️" },
-  { key: "external", label: "External", icon: "🔗" },
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "all", label: "Semua" },
+  { key: "downloader", label: "Downloader" },
+  { key: "maker", label: "Maker" },
+  { key: "tools", label: "Tools" },
+  { key: "external", label: "External" },
 ];
 
 function ToolCard({
@@ -34,263 +38,234 @@ function ToolCard({
   return (
     <Link
       href={href}
-      style={{
-        display: "block",
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 16,
-        padding: 18,
-        textDecoration: "none",
-        color: "#F3EEFA",
-      }}
+      className="group flex flex-col rounded-2xl bg-zinc-900/50 p-4 ring-1 ring-white/5 transition hover:bg-zinc-900 hover:ring-violet-500/30"
     >
-      <div style={{ fontSize: 26, marginBottom: 10 }}>{icon}</div>
-      <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: 12.5, color: "#9C90AC", lineHeight: 1.5, minHeight: 32 }}>{desc}</div>
-      <span
-        style={{
-          display: "inline-block",
-          marginTop: 10,
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: "0.03em",
-          color: "#C4B5FD",
-          background: "rgba(168,85,247,0.15)",
-          padding: "3px 10px",
-          borderRadius: 100,
-        }}
-      >
+      <span className="mb-3 text-2xl leading-none">{icon}</span>
+      <span className="text-sm font-semibold text-zinc-100 group-hover:text-white">
+        {title}
+      </span>
+      <span className="mt-1 line-clamp-2 flex-1 text-[12px] leading-relaxed text-zinc-500">
+        {desc}
+      </span>
+      <span className="mt-3 w-fit rounded-full bg-violet-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-300">
         {tag}
       </span>
     </Link>
   );
 }
 
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mb-8">
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        {title}
+      </h2>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{children}</div>
+    </section>
+  );
+}
+
 export default function Dashboard() {
   const [tab, setTab] = useState<TabKey>("all");
   const [history, setHistory] = useState<DownloadRecord[]>([]);
+  const [q, setQ] = useState("");
 
   useEffect(() => {
     setHistory(listDownloads());
   }, [tab]);
 
+  const query = q.trim().toLowerCase();
 
-  const showDownloader = tab === "all" || tab === "downloader";
-  const showMaker = tab === "all" || tab === "maker";
-  const showExternal = tab === "all" || tab === "external";
-  const showTools = tab === "all" || tab === "tools";
-  const showEmpty = tab === "vault";
+  const filterTools = <T extends { title: string; description: string }>(
+    list: T[]
+  ) =>
+    !query
+      ? list
+      : list.filter(
+          (t) =>
+            t.title.toLowerCase().includes(query) ||
+            t.description.toLowerCase().includes(query)
+        );
+
+  const dl = useMemo(() => filterTools(downloaderTools), [query]);
+  const mk = useMemo(() => filterTools(makerTools), [query]);
+  const ex = useMemo(() => filterTools(externalTools), [query]);
+  const tl = useMemo(() => filterTools(toolsList), [query]);
+
+  const showDl = tab === "all" || tab === "downloader";
+  const showMk = tab === "all" || tab === "maker";
+  const showEx = tab === "all" || tab === "external";
+  const showTl = tab === "all" || tab === "tools";
 
   return (
-    <div style={{ background: "#0B0710", minHeight: "100vh", color: "#F3EEFA", fontFamily: "sans-serif" }}>
-      <header style={{ display: "flex", alignItems: "center", gap: 12, padding: "20px 20px 14px" }}>
-        <div
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 12,
-            background: "linear-gradient(135deg,#A855F7,#7C3AED)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 18,
-          }}
-        >
-          🧩
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>Tool Web</div>
-          <div style={{ fontSize: 11, color: "#9C90AC" }}>All Tools Hub</div>
-        </div>
-        <div
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: "50%",
-            background: "#1C1226",
-            border: "1px solid rgba(255,255,255,0.08)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          👤
+    <div className="min-h-screen bg-[#09090b] text-zinc-100">
+      {/* Header */}
+      <header className="sticky top-0 z-40 border-b border-white/5 bg-[#09090b]/85 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-xs font-black shadow-lg shadow-violet-500/20">
+            TW
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-bold leading-none">Tool Web</p>
+            <p className="text-[10px] text-zinc-500">All tools hub</p>
+          </div>
+          <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            Online
+          </span>
         </div>
       </header>
 
-      <div
-        style={{
-          margin: "4px 20px 18px",
-          background: "linear-gradient(120deg,#C026D3,#A855F7 55%,#F0ABFC)",
-          borderRadius: 20,
-          padding: "18px 18px 16px",
-          color: "#1A0B24",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: "50%",
-              background: "rgba(255,255,255,0.55)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 20,
-              flexShrink: 0,
-            }}
-          >
-            👤
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.75 }}>Pengguna</div>
-            <div style={{ fontFamily: "sans-serif", fontWeight: 700, fontSize: 16 }}>Selamat datang</div>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              background: "rgba(255,255,255,0.45)",
-              padding: "5px 11px",
-              borderRadius: 100,
-              fontSize: 11,
-              fontWeight: 700,
-            }}
-          >
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#16A34A" }} />
-            ONLINE
-          </div>
+      <main className="mx-auto max-w-3xl px-4 py-5">
+        {/* Search */}
+        <div className="mb-5">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Cari tool..."
+            className="w-full rounded-2xl border-0 bg-zinc-900/80 px-4 py-3 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-violet-500/40"
+          />
         </div>
-      </div>
 
-      <div
-        style={{
-          margin: "0 20px 16px",
-          background: "#1C1226",
-          border: "1px solid rgba(255,255,255,0.08)",
-          borderRadius: 14,
-          padding: "13px 16px",
-          color: "#6B6178",
-          fontSize: 14,
-        }}
-      >
-        🔍 Cari fitur, alat, atau layanan...
-      </div>
-
-      <div style={{ position: "relative", marginBottom: 22 }}>
-        <div style={{ display: "flex", gap: 9, padding: "0 20px", overflowX: "auto" }}>
+        {/* Tabs */}
+        <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
           {TABS.map((t) => (
             <button
               key={t.key}
+              type="button"
               onClick={() => setTab(t.key)}
-              style={{
-                flexShrink: 0,
-                padding: "9px 16px",
-                borderRadius: 100,
-                fontSize: 13,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: tab === t.key ? "#A855F7" : "transparent",
-                color: tab === t.key ? "#fff" : "#9C90AC",
-              }}
+              className={
+                "shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition " +
+                (tab === t.key
+                  ? "bg-white text-zinc-900"
+                  : "bg-zinc-900 text-zinc-400 ring-1 ring-white/5 hover:text-zinc-200")
+              }
             >
-              {t.icon} {t.label}
+              {t.label}
             </button>
           ))}
         </div>
-      </div>
 
-      <div style={{ padding: "0 20px 40px" }}>
-        {showDownloader && (
-          <section style={{ marginBottom: 32 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>⬇️ Downloader</h2>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {downloaderTools.map((tool) => (
-                <ToolCard key={tool.slug} href={`/downloader/${tool.slug}`} icon={tool.icon} title={tool.title} desc={tool.description} tag={tool.tag} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {showMaker && (
-          <section style={{ marginBottom: 32 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>✨ Maker</h2>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {makerTools.map((tool) => (
-                <ToolCard key={tool.slug} href={`/maker/${tool.slug}`} icon={tool.icon} title={tool.title} desc={tool.description} tag={tool.tag} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {showExternal && (
-          <section style={{ marginBottom: 32 }}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>🔗 External Tools</h2>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {externalTools.map((tool) => (
-                <ToolCard key={tool.slug} href={`/external/${tool.slug}`} icon={tool.icon} title={tool.title} desc={tool.description} tag={tool.tag} />
-              ))}
-            </div>
-          </section>
-      )}
-
-      {showTools && (
-        <section style={{ background: "#1C1226", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 18, marginBottom: 16 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>🛠️ Tools</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
-            {toolsList.map((tool) => (
-              <ToolCard key={tool.slug} href={tool.href} icon={tool.icon} title={tool.title} desc={tool.description} tag={tool.tag} />
+        {/* Grid sections */}
+        {showDl && dl.length > 0 && (
+          <Section title="Downloader">
+            {dl.map((tool) => (
+              <ToolCard
+                key={tool.slug}
+                href={`/downloader/${tool.slug}`}
+                icon={tool.icon}
+                title={tool.title}
+                desc={tool.description}
+                tag={tool.tag}
+              />
             ))}
-          </div>
-        </section>
-      )}
-
-        {showEmpty && (
-          <section style={{ textAlign: "center", padding: "60px 20px", color: "#6B6178" }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🚧</div>
-            <div style={{ fontSize: 14 }}>Segera hadir</div>
-          </section>
+          </Section>
         )}
 
+        {showMk && mk.length > 0 && (
+          <Section title="Maker">
+            {mk.map((tool) => (
+              <ToolCard
+                key={tool.slug}
+                href={`/maker/${tool.slug}`}
+                icon={tool.icon}
+                title={tool.title}
+                desc={tool.description}
+                tag={tool.tag}
+              />
+            ))}
+          </Section>
+        )}
+
+        {showTl && tl.length > 0 && (
+          <Section title="Tools">
+            {tl.map((tool) => (
+              <ToolCard
+                key={tool.slug}
+                href={tool.href}
+                icon={tool.icon}
+                title={tool.title}
+                desc={tool.description}
+                tag={tool.tag}
+              />
+            ))}
+          </Section>
+        )}
+
+        {showEx && ex.length > 0 && (
+          <Section title="External">
+            {ex.map((tool) => (
+              <ToolCard
+                key={tool.slug}
+                href={`/external/${tool.slug}`}
+                icon={tool.icon}
+                title={tool.title}
+                desc={tool.description}
+                tag={tool.tag}
+              />
+            ))}
+          </Section>
+        )}
+
+        {/* History — ringkas */}
         {(tab === "all" || tab === "downloader") && (
-          <section style={{ background: "#1C1226", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <span style={{ fontWeight: 700, fontSize: 14 }}>↺ History Download</span>
-              <span style={{ fontSize: 12, color: "#6B6178" }}>{history.length}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-              {history.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => { clearDownloads(); setHistory([]); }}
-                  style={{ fontSize: 11, background: "transparent", border: "1px solid rgba(255,255,255,0.15)", color: "#9C90AC", borderRadius: 8, padding: "4px 10px" }}
-                >
-                  Hapus semua
-                </button>
-              )}
+          <section className="mb-8 rounded-2xl bg-zinc-900/40 p-4 ring-1 ring-white/5">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Riwayat download
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-zinc-600">{history.length}</span>
+                {history.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearDownloads();
+                      setHistory([]);
+                    }}
+                    className="text-[11px] text-zinc-500 hover:text-zinc-300"
+                  >
+                    Hapus
+                  </button>
+                )}
+              </div>
             </div>
             {history.length === 0 ? (
-              <div style={{ background: "rgba(255,255,255,0.03)", border: "1px dashed rgba(255,255,255,0.1)", borderRadius: 12, padding: 16, fontSize: 12.5, color: "#9C90AC", textAlign: "center" }}>
-                Belum ada riwayat. Download tersimpan di perangkat ini (tanpa database server).
-              </div>
+              <p className="text-center text-xs text-zinc-600">
+                Belum ada riwayat di perangkat ini
+              </p>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {history.slice(0, 20).map((h) => (
-                  <div key={h.id} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 10, fontSize: 12 }}>
-                    <div style={{ fontWeight: 600 }}>{h.title || "Tanpa judul"}</div>
-                    <div style={{ color: "#9C90AC", marginTop: 2 }}>
-                      {h.platform.toUpperCase()} · {h.mediaType}{h.quality ? " · " + h.quality : ""} · {new Date(h.createdAt).toLocaleString("id-ID")}
-                    </div>
-                  </div>
+              <ul className="space-y-2">
+                {history.slice(0, 8).map((h) => (
+                  <li
+                    key={h.id}
+                    className="rounded-xl bg-black/20 px-3 py-2 text-xs"
+                  >
+                    <p className="font-medium text-zinc-200">
+                      {h.title || "Tanpa judul"}
+                    </p>
+                    <p className="text-zinc-600">
+                      {h.platform} · {h.mediaType}
+                      {h.quality ? " · " + h.quality : ""}
+                    </p>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
           </section>
         )}
-      </div>
+
+        <footer className="border-t border-white/5 py-8 text-center text-[11px] text-zinc-600">
+          Tool Web · Developer by{" "}
+          <span className="font-semibold text-violet-400/90">Meydi</span>
+        </footer>
+      </main>
     </div>
   );
 }
