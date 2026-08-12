@@ -190,7 +190,14 @@ export default function ComicDetailPage() {
 
       <div className="mx-auto max-w-6xl px-3 py-4 sm:px-4">
         {note && (
-          <p className="mb-4 text-sm leading-relaxed text-zinc-400">{note}</p>
+          <section className="mb-5 rounded-2xl bg-zinc-900/50 p-4 ring-1 ring-white/5">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Sinopsis
+            </h2>
+            <p className="text-sm leading-relaxed text-zinc-300 whitespace-pre-line">
+              {note}
+            </p>
+          </section>
         )}
         {loading && <p className="text-sm text-zinc-500">Memuat chapter...</p>}
         {err && <p className="text-sm text-amber-400">{err}</p>}
