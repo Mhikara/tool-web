@@ -850,9 +850,10 @@ if (action === "home") {
       tasks.push(source === "all" || source === "mangadex" ? mdList("latestUploadedChapter", 12, genre, typeFilter, demographic) : Promise.resolve([]));
       tasks.push(source === "all" || source === "omega" ? omegaList("latest", 12) : Promise.resolve([]));
       tasks.push(source === "all" || source === "fullmanhwa" ? fmList() : Promise.resolve([]));
+      tasks.push(source === "all" || source === "komiku" ? kmList() : Promise.resolve([]));
 
-      const [md, omega, fm] = await Promise.all(tasks);
-      const latest = [...omega, ...fm, ...md].slice(0, 36);
+      const [md, omega, fm, km] = await Promise.all(tasks);
+      const latest = [...omega, ...fm, ...md, ...km].slice(0, 48);
 
       let popular: unknown[] = [];
       let topRated: unknown[] = [];
@@ -870,7 +871,7 @@ if (action === "home") {
       }
 
       return NextResponse.json({
-        sources: ["mangadex", "omega", "fullmanhwa"],
+        sources: ["mangadex", "omega", "fullmanhwa", "komiku"],
         latest,
         popular,
         topRated,
