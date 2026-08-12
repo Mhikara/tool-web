@@ -6,6 +6,8 @@ export const maxDuration = 30;
 function allowed(host: string) {
   const h = host.toLowerCase();
   return (
+    h.includes("omegascans") ||
+    h.includes("omega") ||
     h.includes("fullmanhwa") ||
     h.includes("manhwabuddy") ||
     h.includes("mgread") ||

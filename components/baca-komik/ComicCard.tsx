@@ -14,10 +14,19 @@ export default function ComicCard({ item }: { item: ComicItem }) {
           ? "bg-fuchsia-500/90"
           : "bg-zinc-600/90";
 
-  const cover =
-    item.cover && item.cover.startsWith("http")
-      ? "/api/komik/image?url=" + encodeURIComponent(item.cover)
-      : item.cover;
+  // Omega/CDN yang sudah allow CORS-ish: pakai langsung; sisanya proxy
+  const raw = item.cover || "";
+  const useDirect =
+    /omegascans|mangadex\.org|uploads\.mangadex/i.test(raw);
+  const cover = !raw
+    ? null
+    : raw.startsWith("/api/")
+      ? raw
+      : useDirect
+        ? raw
+        : raw.startsWith("http")
+          ? "/api/komik/image?url=" + encodeURIComponent(raw)
+          : raw;
 
   return (
     <Link
