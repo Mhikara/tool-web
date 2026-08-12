@@ -21,16 +21,13 @@ export function getNsfw(): boolean {
   if (typeof window === "undefined") return false;
   return localStorage.getItem(NSFW_KEY) === "1";
 }
-
 export function setNsfw(on: boolean) {
   localStorage.setItem(NSFW_KEY, on ? "1" : "0");
 }
-
 export function getAgeOk(): boolean {
   if (typeof window === "undefined") return false;
   return localStorage.getItem(AGE_KEY) === "1";
 }
-
 export function setAgeOk(ok: boolean) {
   localStorage.setItem(AGE_KEY, ok ? "1" : "0");
 }

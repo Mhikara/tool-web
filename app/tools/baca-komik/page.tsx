@@ -6,6 +6,9 @@ import { Heart, History, Search, X } from "lucide-react";
 import ComicCard from "../../../components/baca-komik/ComicCard";
 import { useComicStorage } from "../../../lib/useComicStorage";
 import {
+import AgeGate from "@/components/baca-komik/AgeGate";
+import GenreBar from "@/components/baca-komik/GenreBar";
+import ContinueStrip from "@/components/baca-komik/ContinueStrip";
   fetchHome,
   normalizeList,
   searchComics,
@@ -39,6 +42,7 @@ function Pill({
 
 export default function BacaKomikCatalogPage() {
   const { readingHistory, bookmarks } = useComicStorage();
+  const [genre, setGenre] = useState("");
   const [source, setSource] = useState("all");
   const [sort, setSort] = useState<"latest" | "popular" | "rating">("latest");
   const [statusFilter, setStatusFilter] = useState<"all" | "ongoing" | "completed">("all");
@@ -173,11 +177,13 @@ export default function BacaKomikCatalogPage() {
   const continueList = readingHistory.slice(0, 8);
 
   return (
-    <div className="min-h-screen bg-[#0a0a0c] text-zinc-100">
+    <div className="min-h-screen relative bg-[#0a0a0c] text-zinc-100">
+      <AgeGate />
+
       {/* Header */}
       <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0a0a0c]/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
-          <Link href="/" className="text-xs text-zinc-500 hover:text-zinc-300">
+          <Link href="/tools/baca-komik/library" className="text-xs text-zinc-500 hover:text-zinc-300">
             ←
           </Link>
           <div className="flex flex-1 items-center gap-2.5">
