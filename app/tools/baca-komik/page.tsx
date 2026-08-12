@@ -267,20 +267,31 @@ export default function BacaKomikCatalogPage() {
               <History className="h-3.5 w-3.5" /> Lanjutkan baca
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {continueList.map((h: any) => (
+              {continueList.map((h) => (
                 <Link
-                  key={h.id + String(h.chapter || "")}
+                  key={h.comicId + ":" + h.chapterId}
                   href={
-                    h.chapter
-                      ? "/tools/baca-komik/read/" +
-                        encodeURIComponent(h.id) +
-                        "/" +
-                        encodeURIComponent(h.chapter)
-                      : "/tools/baca-komik/" + encodeURIComponent(h.id)
+                    "/tools/baca-komik/read/" +
+                    encodeURIComponent(h.comicId) +
+                    "/" +
+                    encodeURIComponent(h.chapterId)
                   }
-                  className="shrink-0 rounded-full bg-zinc-900 px-3.5 py-1.5 text-xs text-zinc-300 ring-1 ring-white/5"
+                  className="flex max-w-[200px] shrink-0 items-center gap-2 rounded-full bg-zinc-900 py-1.5 pl-1.5 pr-3 text-xs text-zinc-300 ring-1 ring-white/5"
                 >
-                  {h.title || h.id}
+                  {h.cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={h.cover}
+                      alt=""
+                      className="h-7 w-7 rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-800 text-[10px]">
+                      📖
+                    </span>
+                  )}
+                  <span className="truncate">{h.title}</span>
                 </Link>
               ))}
             </div>

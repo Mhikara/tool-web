@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useComicStorage } from "@/lib/useComicStorage";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -25,6 +26,7 @@ function ReaderInner() {
   const params = useParams();
   const router = useRouter();
   const { theme, toggle } = useTheme();
+  const { addHistory } = useComicStorage();
 
   const comicId = decodeURIComponent(String(params?.id || ""));
   const chapterId = decodeURIComponent(String(params?.chapter || ""));
@@ -57,25 +59,17 @@ function ReaderInner() {
     load();
   }, [load]);
 
-  // Simpan history sederhana
+  // Reading history (standar useComicStorage)
   useEffect(() => {
     if (!data?.pages?.length) return;
-    try {
-      const key = "bk_hist_v1";
-      const prev = JSON.parse(localStorage.getItem(key) || "[]");
-      const row = {
-        id: comicId,
-        chapter: chapterId,
-        title: data.title || chapterId,
-        at: Date.now(),
-      };
-      const next = [
-        row,
-        ...prev.filter((x: any) => x.id !== comicId),
-      ].slice(0, 40);
-      localStorage.setItem(key, JSON.stringify(next));
-    } catch {}
-  }, [data, comicId, chapterId]);
+    addHistory({
+      comicId,
+      title: data.title || comicId,
+      cover: null,
+      chapterId,
+      chapterTitle: data.title || chapterId,
+    });
+  }, [data, comicId, chapterId, addHistory]);
 
   const pages = data?.pages || [];
 
