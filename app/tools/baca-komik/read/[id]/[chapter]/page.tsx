@@ -1,4 +1,5 @@
 "use client";
+import ChapterRecs from "@/components/baca-komik/ChapterRecs";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
@@ -27,6 +28,9 @@ function ReaderInner() {
   const router = useRouter();
   const { theme, toggle } = useTheme();
   const { addHistory } = useComicStorage();
+  const [chapterList, setChapterList] = useState<{ id: string; title: string }[]>([]);
+  const [coverComic, setCoverComic] = useState<string | null>(null);
+  const [seriesTitle, setSeriesTitle] = useState("");
 
   const comicId = decodeURIComponent(String(params?.id || ""));
   const chapterId = decodeURIComponent(String(params?.chapter || ""));
@@ -34,8 +38,6 @@ function ReaderInner() {
   const [data, setData] = useState<ReadData | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [coverComic, setCoverComic] = useState<string | null>(null);
-  const [seriesTitle, setSeriesTitle] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,6 +101,21 @@ function ReaderInner() {
 
 
   const pages = data?.pages || [];
+  const chIndex = chapterList.findIndex((c) => c.id === chapterId);
+  const prevCh = chIndex > 0 ? chapterList[chIndex - 1] : null;
+  const nextCh =
+    chIndex >= 0 && chIndex < chapterList.length - 1
+      ? chapterList[chIndex + 1]
+      : null;
+  const goChapter = (id: string) => {
+    router.push(
+      "/tools/baca-komik/read/" +
+        encodeURIComponent(comicId) +
+        "/" +
+        encodeURIComponent(id)
+    );
+  };
+
 
   return (
     <div className="pb-24">
@@ -207,6 +224,19 @@ function ReaderInner() {
           </div>
         </div>
       )}
+
+      <div className="mx-auto flex max-w-2xl gap-2 px-3 py-4">
+        <button type="button" disabled={!prevCh} onClick={() => prevCh && goChapter(prevCh.id)}
+          className="flex-1 rounded-xl bg-zinc-900 py-3 text-sm font-semibold ring-1 ring-white/10 disabled:opacity-30">
+          ← Prev
+        </button>
+        <button type="button" disabled={!nextCh} onClick={() => nextCh && goChapter(nextCh.id)}
+          className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-bold text-white disabled:opacity-30">
+          {nextCh ? "Next chapter →" : "Selesai"}
+        </button>
+      </div>
+      <ChapterRecs chapterId={chapterId} excludeId={comicId} />
+
     </div>
   );
 }

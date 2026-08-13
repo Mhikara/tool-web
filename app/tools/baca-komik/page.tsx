@@ -271,12 +271,6 @@ export default function BacaKomikCatalogPage() {
         {view === "katalog" && !searchList && (
           <ContinueStrip items={readingHistory} />
         )}
-                  <span className="truncate">{h.title}</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
 
         {/* Filters — satu baris, tidak padat */}
         <section className="space-y-2">
