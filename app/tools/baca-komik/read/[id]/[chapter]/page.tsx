@@ -34,6 +34,8 @@ function ReaderInner() {
   const [data, setData] = useState<ReadData | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [coverComic, setCoverComic] = useState<string | null>(null);
+  const [seriesTitle, setSeriesTitle] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,20 +61,41 @@ function ReaderInner() {
     load();
   }, [load]);
 
+  // ambil cover + judul series untuk history
+  useEffect(() => {
+    if (!comicId) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(
+          "/api/komik?action=detail&id=" + encodeURIComponent(comicId)
+        );
+        const j = await res.json();
+        if (!alive) return;
+        if (j.cover) setCoverComic(j.cover);
+        if (j.title) setSeriesTitle(j.title);
+      } catch {}
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [comicId]);
+
+
   // Reading history (standar useComicStorage)
   // history sekali per chapter (hindari infinite loop)
   useEffect(() => {
     if (!data?.pages?.length) return;
     addHistory({
       comicId,
-      title: data.title || comicId,
-      cover: null,
+      title: seriesTitle || data.title || comicId,
+      cover: coverComic,
       chapterId,
       chapterTitle: data.title || chapterId,
     });
     // sengaja tidak memasukkan addHistory ke deps yang berubah tiap render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.pages?.length, comicId, chapterId]);
+  }, [data?.pages?.length, comicId, chapterId, coverComic, seriesTitle]);
 
 
   const pages = data?.pages || [];

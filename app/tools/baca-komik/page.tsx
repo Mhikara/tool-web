@@ -268,36 +268,9 @@ export default function BacaKomikCatalogPage() {
 
       <main className="mx-auto max-w-5xl space-y-6 px-4 py-5">
         {/* Lanjutkan */}
-        {continueList.length > 0 && view === "katalog" && !searchList && (
-          <section>
-            <div className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-zinc-400">
-              <History className="h-3.5 w-3.5" /> Lanjutkan baca
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {continueList.map((h) => (
-                <Link
-                  key={h.comicId + ":" + h.chapterId}
-                  href={
-                    "/tools/baca-komik/read/" +
-                    encodeURIComponent(h.comicId) +
-                    "/" +
-                    encodeURIComponent(h.chapterId)
-                  }
-                  className="flex max-w-[200px] shrink-0 items-center gap-2 rounded-full bg-zinc-900 py-1.5 pl-1.5 pr-3 text-xs text-zinc-300 ring-1 ring-white/5"
-                >
-                  {h.cover ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={h.cover}
-                      alt=""
-                      className="h-7 w-7 rounded-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-800 text-[10px]">
-                      📖
-                    </span>
-                  )}
+        {view === "katalog" && !searchList && (
+          <ContinueStrip items={readingHistory} />
+        )}
                   <span className="truncate">{h.title}</span>
                 </Link>
               ))}
