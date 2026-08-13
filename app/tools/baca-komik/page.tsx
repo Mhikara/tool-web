@@ -15,6 +15,32 @@ import {
   type ComicItem,
 } from "../../../lib/komik/api";
 
+
+function Pill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition " +
+        (active
+          ? "bg-white text-zinc-900"
+          : "bg-zinc-900/80 text-zinc-400 ring-1 ring-white/5 hover:text-zinc-200")
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
 export default function BacaKomikCatalogPage() {
   const { readingHistory, bookmarks } = useComicStorage();
   const [genre, setGenre] = useState("");
