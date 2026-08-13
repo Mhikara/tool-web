@@ -635,52 +635,88 @@ async function kmList() {
     const items: any[] = [];
     const seen = new Set<string>();
 
-    // pasangan link + thumbnail
-    const re =
-      /href="(?:https?:\/\/komiku\.org)?\/manga\/([a-z0-9-]+)\/?"[\s\S]{0,400}?src="(https:\/\/(?:thumbnail|img)\.komiku\.org\/[^"]+)"/gi;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(html)) !== null) {
-      const slug = m[1];
-      if (seen.has(slug) || slug === "page") continue;
-      seen.add(slug);
-      items.push({
-        id: "km:" + slug,
-        source: "komiku",
-        title: slug.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
-        url: slug,
-        cover: kmProxy(m[2]),
-        colored: true,
-        colorLabel: "Bergambar",
-        statusLabel: "Ongoing",
-        external: KM + "/manga/" + slug + "/",
-      });
-    }
+    // 1) pasangan href manga + img thumbnail (urutan href dulu atau img dulu)
+    const patterns = [
+      /href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/manga\/([a-z0-9-]+)\/?"[\s\S]{0,600}?src="((?:https:)?\/\/(?:thumbnail|img)\.komiku\.org\/[^"]+)"/gi,
+      /src="((?:https:)?\/\/(?:thumbnail|img)\.komiku\.org\/[^"]+)"[\s\S]{0,600}?href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/manga\/([a-z0-9-]+)\/?"/gi,
+    ];
 
-    if (items.length < 8) {
-      const re2 = /href="(?:https?:\/\/komiku\.org)?\/manga\/([a-z0-9-]+)\/?"/gi;
-      while ((m = re2.exec(html)) !== null) {
-        const slug = m[1];
-        if (seen.has(slug) || slug === "page") continue;
+    for (const re of patterns) {
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(html)) !== null) {
+        let slug = "";
+        let img = "";
+        if (m[1] && m[1].includes("komiku")) {
+          img = m[1];
+          slug = m[2];
+        } else {
+          slug = m[1];
+          img = m[2];
+        }
+        if (!slug || slug === "page" || seen.has(slug)) continue;
         seen.add(slug);
+        if (img.startsWith("//")) img = "https:" + img;
+        img = img.replace(/&amp;/g, "&").replace(/&#038;/g, "&");
+        const cover =
+          typeof kmProxy === "function"
+            ? kmProxy(img)
+            : "/api/komik/image?url=" + encodeURIComponent(img);
         items.push({
           id: "km:" + slug,
           source: "komiku",
-          title: slug.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+          title: slug
+            .replace(/-/g, " ")
+            .replace(/\b\w/g, (c: string) => c.toUpperCase()),
           url: slug,
-          cover: null,
+          cover,
           colored: true,
           colorLabel: "Bergambar",
           statusLabel: "Ongoing",
+          typeLabel: "KOMIK",
           external: KM + "/manga/" + slug + "/",
         });
       }
     }
 
-    // judul dari alt
+    // 2) fallback tanpa cover
+    if (items.length < 8) {
+      const re2 =
+        /href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/manga\/([a-z0-9-]+)\/?"/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re2.exec(html)) !== null) {
+        const slug = m[1];
+        if (!slug || slug === "page" || seen.has(slug)) continue;
+        seen.add(slug);
+        items.push({
+          id: "km:" + slug,
+          source: "komiku",
+          title: slug
+            .replace(/-/g, " ")
+            .replace(/\b\w/g, (c: string) => c.toUpperCase()),
+          url: slug,
+          cover: null,
+          colored: true,
+          colorLabel: "Bergambar",
+          statusLabel: "Ongoing",
+          typeLabel: "KOMIK",
+          external: KM + "/manga/" + slug + "/",
+        });
+      }
+    }
+
+    // judul dari alt/title
     const titleMap: Record<string, string> = {};
     const altRe =
-      /(?:alt|title)="([^"]{3,100})"[^>]{0,120}href="(?:https?:\/\/komiku\.org)?\/manga\/([a-z0-9-]+)/gi;
-    while ((m = altRe.exec(html)) !== null) titleMap[m[2]] = m[1].trim();
+      /(?:alt|title)="([^"]{3,120})"[^>]{0,250}href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/manga\/([a-z0-9-]+)/gi;
+    let m2: RegExpExecArray | null;
+    while ((m2 = altRe.exec(html)) !== null) {
+      titleMap[m2[2]] = m2[1].trim();
+    }
+    const altRe2 =
+      /href="(?:https?:\/\/(?:www\.)?komiku\.org)?\/manga\/([a-z0-9-]+)\/?"[^>]{0,250}(?:alt|title)="([^"]{3,120})"/gi;
+    while ((m2 = altRe2.exec(html)) !== null) {
+      titleMap[m2[1]] = m2[2].trim();
+    }
     for (const it of items) {
       if (titleMap[it.url]) it.title = titleMap[it.url];
     }
