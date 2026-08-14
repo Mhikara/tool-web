@@ -956,7 +956,27 @@ if (action === "home") {
       tasks.push(source === "all" || source === "komiku" ? kmList() : Promise.resolve([]));
 
       const [md, omega, fm, km] = await Promise.all(tasks);
-      const latest = [...omega, ...fm, ...md, ...km].slice(0, 48);
+      // interleave supaya komiku/md tidak terpotong slice(0,48)
+      const buckets = [omega, fm, md, km].map((a) => a as any[]);
+      const latest: any[] = [];
+      const seen = new Set<string>();
+      let i = 0;
+      while (latest.length < 48) {
+        let added = false;
+        for (const b of buckets) {
+          if (i < b.length) {
+            const it = b[i];
+            const id = String(it?.id || "");
+            if (id && !seen.has(id)) {
+              seen.add(id);
+              latest.push(it);
+              added = true;
+            }
+          }
+        }
+        if (!added) break;
+        i++;
+      }
 
       let popular: unknown[] = [];
       let topRated: unknown[] = [];
