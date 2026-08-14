@@ -1,4 +1,5 @@
 "use client";
+import AutoScrollBar from "@/components/baca-komik/AutoScrollBar";
 import ChapterRecs from "@/components/baca-komik/ChapterRecs";
 
 import { useCallback, useEffect, useState } from "react";
@@ -285,6 +286,7 @@ function ReaderInner() {
           {nextCh ? "Chapter berikutnya →" : "Kembali ke daftar"}
         </button>
       </div>
+      <AutoScrollBar />
       <ChapterRecs chapterId={chapterId} excludeId={comicId} />
 
     </div>
