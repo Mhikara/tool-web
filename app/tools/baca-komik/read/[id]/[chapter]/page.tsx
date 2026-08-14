@@ -76,6 +76,11 @@ function ReaderInner() {
         if (!alive) return;
         if (j.cover) setCoverComic(j.cover);
         if (j.title) setSeriesTitle(j.title);
+        const chs = (j.chapters || []).map((c: any) => ({
+          id: String(c.id || c.url || ""),
+          title: String(c.title || "Chapter"),
+        }));
+        setChapterList(chs.filter((c: any) => c.id));
       } catch {}
     })();
     return () => {
