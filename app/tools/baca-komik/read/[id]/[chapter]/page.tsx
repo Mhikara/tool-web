@@ -100,24 +100,42 @@ function ReaderInner() {
   }, [data?.pages?.length, comicId, chapterId, coverComic, seriesTitle]);
 
 
-  const pages = data?.pages || [];
+    const pages = data?.pages || [];
 
-  // cocokkan id longgar (encoding / prefix)
+  const chapterNum = (id: string, title?: string) => {
+    const s = `${id} ${title || ""}`;
+    const m1 = s.match(/chapter[-_/ ]?(\d+(?:\.\d+)?)/i);
+    if (m1) return parseFloat(m1[1]);
+    const m2 = (title || "").match(/\b(\d+(?:\.\d+)?)\b/);
+    return m2 ? parseFloat(m2[1]) : NaN;
+  };
+
+  // urut baca: Ch1 → Ch2 → … (bukan 94→1)
+  const sortedCh = [...chapterList].sort((a, b) => {
+    const na = chapterNum(a.id, a.title);
+    const nb = chapterNum(b.id, b.title);
+    if (!Number.isNaN(na) && !Number.isNaN(nb) && na !== nb) return na - nb;
+    return String(a.id).localeCompare(String(b.id));
+  });
+
   const norm = (s: string) =>
     decodeURIComponent(String(s || ""))
       .trim()
-      .toLowerCase()
-      .replace(/^\/+/, "");
+      .toLowerCase();
 
-  const chIndex = chapterList.findIndex((c) => {
+  const chIndex = sortedCh.findIndex((c) => {
     const a = norm(c.id);
     const b = norm(chapterId);
-    return a === b || a.endsWith(b) || b.endsWith(a);
+    if (a === b || a.endsWith(b) || b.endsWith(a)) return true;
+    const na = chapterNum(c.id, c.title);
+    const nb = chapterNum(chapterId);
+    return !Number.isNaN(na) && !Number.isNaN(nb) && na === nb;
   });
-  const prevCh = chIndex > 0 ? chapterList[chIndex - 1] : null;
+
+  const prevCh = chIndex > 0 ? sortedCh[chIndex - 1] : null;
   const nextCh =
-    chIndex >= 0 && chIndex < chapterList.length - 1
-      ? chapterList[chIndex + 1]
+    chIndex >= 0 && chIndex < sortedCh.length - 1
+      ? sortedCh[chIndex + 1]
       : null;
 
   const goChapter = (id: string) => {
@@ -128,6 +146,11 @@ function ReaderInner() {
         encodeURIComponent(id)
     );
   };
+
+  const goDetail = () => {
+    router.push("/tools/baca-komik/" + encodeURIComponent(comicId));
+  };
+
 
   const goDetail = () => {
     router.push("/tools/baca-komik/" + encodeURIComponent(comicId));
@@ -237,7 +260,7 @@ function ReaderInner() {
               onClick={() => (nextCh ? goChapter(nextCh.id) : goDetail())}
               className="flex items-center gap-1 text-sm font-semibold text-violet-500"
             >
-              {nextCh ? "Lanjut" : "Selesai"} <ChevronRight className="h-4 w-4" />
+              {nextCh ? "Lanjut →" : "Daftar"} <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -257,7 +280,7 @@ function ReaderInner() {
           onClick={() => (nextCh ? goChapter(nextCh.id) : goDetail())}
           className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-bold text-white active:scale-[0.98]"
         >
-          {nextCh ? "Next chapter →" : "Selesai"}
+          {nextCh ? "Chapter berikutnya →" : "Kembali ke daftar"}
         </button>
       </div>
       <ChapterRecs chapterId={chapterId} excludeId={comicId} />
