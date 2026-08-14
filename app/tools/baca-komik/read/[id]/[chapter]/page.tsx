@@ -101,12 +101,25 @@ function ReaderInner() {
 
 
   const pages = data?.pages || [];
-  const chIndex = chapterList.findIndex((c) => c.id === chapterId);
+
+  // cocokkan id longgar (encoding / prefix)
+  const norm = (s: string) =>
+    decodeURIComponent(String(s || ""))
+      .trim()
+      .toLowerCase()
+      .replace(/^\/+/, "");
+
+  const chIndex = chapterList.findIndex((c) => {
+    const a = norm(c.id);
+    const b = norm(chapterId);
+    return a === b || a.endsWith(b) || b.endsWith(a);
+  });
   const prevCh = chIndex > 0 ? chapterList[chIndex - 1] : null;
   const nextCh =
     chIndex >= 0 && chIndex < chapterList.length - 1
       ? chapterList[chIndex + 1]
       : null;
+
   const goChapter = (id: string) => {
     router.push(
       "/tools/baca-komik/read/" +
@@ -114,6 +127,10 @@ function ReaderInner() {
         "/" +
         encodeURIComponent(id)
     );
+  };
+
+  const goDetail = () => {
+    router.push("/tools/baca-komik/" + encodeURIComponent(comicId));
   };
 
 
@@ -215,23 +232,31 @@ function ReaderInner() {
             <span className="text-xs opacity-50">
               {pages.length} halaman
             </span>
-            <Link
-              href={"/tools/baca-komik/" + encodeURIComponent(comicId)}
+            <button
+              type="button"
+              onClick={() => (nextCh ? goChapter(nextCh.id) : goDetail())}
               className="flex items-center gap-1 text-sm font-semibold text-violet-500"
             >
-              Lanjut <ChevronRight className="h-4 w-4" />
-            </Link>
+              {nextCh ? "Lanjut" : "Selesai"} <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
         </div>
       )}
 
-      <div className="mx-auto flex max-w-2xl gap-2 px-3 py-4">
-        <button type="button" disabled={!prevCh} onClick={() => prevCh && goChapter(prevCh.id)}
-          className="flex-1 rounded-xl bg-zinc-900 py-3 text-sm font-semibold ring-1 ring-white/10 disabled:opacity-30">
+      <div className="mx-auto flex max-w-2xl gap-2 px-3 pb-28 pt-4">
+        <button
+          type="button"
+          disabled={!prevCh}
+          onClick={() => prevCh && goChapter(prevCh.id)}
+          className="flex-1 rounded-xl bg-zinc-900 py-3 text-sm font-semibold ring-1 ring-white/10 disabled:opacity-30"
+        >
           ← Prev
         </button>
-        <button type="button" disabled={!nextCh} onClick={() => nextCh && goChapter(nextCh.id)}
-          className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-bold text-white disabled:opacity-30">
+        <button
+          type="button"
+          onClick={() => (nextCh ? goChapter(nextCh.id) : goDetail())}
+          className="flex-1 rounded-xl bg-violet-600 py-3 text-sm font-bold text-white active:scale-[0.98]"
+        >
           {nextCh ? "Next chapter →" : "Selesai"}
         </button>
       </div>
