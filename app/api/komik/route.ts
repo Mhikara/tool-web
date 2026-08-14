@@ -10,9 +10,15 @@ const KM = "https://komiku.org";
 const MG = "https://mgread.io";
 const UA = "tool-web-komik/1.1";
 
-function mdCover(mangaId: string, fileName: string | null | undefined) {
-  if (!mangaId || !fileName) return null;
-  return `https://uploads.mangadex.org/covers/${mangaId}/${fileName}.256.jpg`;
+function mdCover(mangaId: string, fileName?: string | null) {
+  if (!fileName) return null;
+  const raw =
+    "https://uploads.mangadex.org/covers/" +
+    mangaId +
+    "/" +
+    fileName +
+    ".256.jpg";
+  return "/api/komik/image?url=" + encodeURIComponent(raw);
 }
 
 function mdTitle(manga: Record<string, unknown>) {
@@ -125,6 +131,7 @@ function mapMd(manga: {
           : status === "hiatus"
             ? "Hiatus"
             : status,
+    rating: null as number | null,
   };
 }
 
@@ -141,6 +148,7 @@ async function mdList(
   url.searchParams.append("availableTranslatedLanguage[]", "id");
   url.searchParams.append("availableTranslatedLanguage[]", "en");
   url.searchParams.append("includes[]", "cover_art");
+  // rating diisi terpisah di map jika ada attributes
 
   if (genre) {
     url.searchParams.append("includedTags[]", genre);

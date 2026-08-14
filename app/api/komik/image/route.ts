@@ -14,16 +14,29 @@ function allowed(host: string) {
     h.includes("komiku") ||
     h.includes("mangadex") ||
     h.includes("mangadex.network") ||
+    h.includes("uploads.mangadex") ||
     /^imgsrv\d*\.com$/.test(h) ||
     h.includes("mangaraw") ||
     h.includes("fastcdn")
   );
 }
 
+function refererFor(host: string) {
+  const h = host.toLowerCase();
+  if (h.includes("mangadex")) return "https://mangadex.org/";
+  if (h.includes("komiku")) return "https://komiku.org/";
+  if (h.includes("omegascans") || h.includes("omega"))
+    return "https://omegascans.org/";
+  if (h.includes("fullmanhwa")) return "https://fullmanhwa.com/";
+  return "https://www.google.com/";
+}
+
 export async function GET(req: NextRequest) {
   try {
     const raw = req.nextUrl.searchParams.get("url") || "";
-    if (!raw) return NextResponse.json({ error: "url wajib" }, { status: 400 });
+    if (!raw) {
+      return NextResponse.json({ error: "url wajib" }, { status: 400 });
+    }
     const target = new URL(raw);
     if (!allowed(target.hostname)) {
       return NextResponse.json({ error: "host diblokir" }, { status: 403 });
@@ -34,14 +47,17 @@ export async function GET(req: NextRequest) {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         Accept: "image/avif,image/webp,image/*,*/*;q=0.8",
-        Referer: "https://fullmanhwa.com/",
+        Referer: refererFor(target.hostname),
+        "Accept-Language": "en-US,en;q=0.9",
       },
-      // cache fetch di Next (revalidate 1 hari)
       next: { revalidate: 86400 },
     } as RequestInit);
 
     if (!res.ok) {
-      return NextResponse.json({ error: "upstream " + res.status }, { status: 502 });
+      return NextResponse.json(
+        { error: "upstream " + res.status },
+        { status: 502 }
+      );
     }
 
     const buf = await res.arrayBuffer();
@@ -51,7 +67,6 @@ export async function GET(req: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": ct,
-        // browser + CDN edge
         "Cache-Control":
           "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400, immutable",
         "CDN-Cache-Control": "public, max-age=604800",
@@ -60,6 +75,9 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "proxy error" }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message || "proxy error" },
+      { status: 500 }
+    );
   }
 }
