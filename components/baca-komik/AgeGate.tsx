@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getAgeOk, setAgeOk, getNsfw, setNsfw } from "@/lib/komik/comicPrefs";
+import { getAgeOk, setAgeOk, getNsfw, setNsfw } from "../../lib/komik/comicPrefs";
 
 export default function AgeGate() {
   const [show, setShow] = useState(false);

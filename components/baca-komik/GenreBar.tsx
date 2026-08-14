@@ -1,5 +1,5 @@
 "use client";
-import { GENRES } from "@/lib/komik/comicPrefs";
+import { GENRES } from "../../lib/komik/comicPrefs";
 export default function GenreBar({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   return (
     <div className="flex gap-2 overflow-x-auto pb-1">
