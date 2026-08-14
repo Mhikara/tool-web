@@ -1,4 +1,5 @@
 "use client";
+import OcrTranslate from "@/components/baca-komik/OcrTranslate";
 
 import { useState } from "react";
 
@@ -59,6 +60,9 @@ export default function ComicImage({
           setErr(true);
         }}
       />
+      <div className="mt-1 flex justify-end px-2">
+        <OcrTranslate imageUrl={typeof src === "string" ? src : ""} />
+      </div>
     </div>
   );
 }
