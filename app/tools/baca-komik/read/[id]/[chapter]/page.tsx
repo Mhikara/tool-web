@@ -157,9 +157,6 @@ function ReaderInner() {
   };
 
 
-  const goDetail = () => {
-    router.push("/tools/baca-komik/" + encodeURIComponent(comicId));
-  };
 
 
   return (
