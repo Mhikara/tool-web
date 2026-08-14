@@ -1,4 +1,5 @@
 "use client";
+import TranslateBlock from "@/components/baca-komik/TranslateBlock";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -203,7 +204,11 @@ export default function ComicDetailPage() {
         {err && <p className="text-sm text-amber-400">{err}</p>}
 
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h2 className="mr-auto font-bold">Daftar chapter</h2>
+          <h2 className="mr-auto font-bold">{data?.synopsis || data?.description ? (
+        <TranslateBlock text={data.synopsis || data.description} label="Sinopsis" />
+      ) : null}
+
+      Daftar chapter</h2>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
