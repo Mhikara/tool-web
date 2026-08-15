@@ -56,6 +56,7 @@ const SOURCES = [
     ["fullmanhwa", "FullManhwa"],
   ["komiku", "Komiku"],
   ["omega", "Omega"],
+  ["mangadex", "MangaDex"],
 ] as const;
 
 export default function HomeClient() {
@@ -76,12 +77,12 @@ export default function HomeClient() {
     try {
       if (source === "all") {
         // Ambil paralel supaya judul Komiku + FullManhwa pasti masuk
-        const [km, fm, om] = await Promise.all([
+        const [km, fm, md, om] = await Promise.all([
           fetch("/api/komik?action=home&source=komiku").then((r) => r.json()),
           fetch("/api/komik?action=home&source=fullmanhwa").then((r) => r.json()),
+          fetch("/api/komik?action=home&source=mangadex").then((r) => r.json()),
           fetch("/api/komik?action=home&source=omega").then((r) => r.json()),
         ]);
-        const md = { latest: [], popular: [], topRated: [], list: [] };
 
         const kmL = mapList(km.latest || km.list || []);
         const fmL = mapList(fm.latest || fm.list || []);
