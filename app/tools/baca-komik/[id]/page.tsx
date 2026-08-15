@@ -1,5 +1,9 @@
 "use client";
-import TranslateBlock from "@/components/baca-komik/TranslateBlock";
+import dynamic from "next/dynamic";
+const TranslateBlock = dynamic(
+  () => import("@/components/baca-komik/TranslateBlock"),
+  { ssr: false, loading: () => null }
+);
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
