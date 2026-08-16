@@ -194,25 +194,16 @@ export default function ComicDetailPage() {
       </div>
 
       <div className="mx-auto max-w-6xl px-3 py-4 sm:px-4">
-        {note && (
-          <section className="mb-5 rounded-2xl bg-zinc-900/50 p-4 ring-1 ring-white/5">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-              Sinopsis
-            </h2>
-            <p className="text-sm leading-relaxed text-zinc-300 whitespace-pre-line">
-              {note}
-            </p>
-          </section>
-        )}
+        {note ? (
+          <div className="mb-5">
+            <TranslateBlock text={note} label="Sinopsis" />
+          </div>
+        ) : null}
         {loading && <p className="text-sm text-zinc-500">Memuat chapter...</p>}
         {err && <p className="text-sm text-amber-400">{err}</p>}
 
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h2 className="mr-auto font-bold">{data?.synopsis || data?.description ? (
-        <TranslateBlock text={data.synopsis || data.description} label="Sinopsis" />
-      ) : null}
-
-      Daftar chapter</h2>
+          <h2 className="mr-auto font-bold">Daftar chapter</h2>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
