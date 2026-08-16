@@ -1159,6 +1159,7 @@ const mangaId = parsed.key;
         feedUrl.searchParams.set("limit", "100");
         feedUrl.searchParams.set("offset", String(offset));
         feedUrl.searchParams.append("translatedLanguage[]", "id");
+        feedUrl.searchParams.append("translatedLanguage[]", "en");
         feedUrl.searchParams.set("order[chapter]", "asc");
         feedUrl.searchParams.append("contentRating[]", "safe");
         feedUrl.searchParams.append("contentRating[]", "suggestive");

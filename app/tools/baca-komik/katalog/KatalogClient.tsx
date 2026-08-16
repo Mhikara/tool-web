@@ -67,7 +67,8 @@ export default function KatalogClient() {
       if (filters.demographic !== "all") {
         sp.set("demographic", filters.demographic);
       }
-      if (filters.genres[0]) sp.set("genre", filters.genres[0]);
+      // genre difilter di client (bukan tag UUID MangaDex)
+      // if (filters.genres[0]) sp.set("genre", filters.genres[0]);
 
       const res = await fetch("/api/komik?" + sp.toString());
       if (!res.ok) throw new Error("Gagal memuat katalog");
@@ -83,6 +84,30 @@ export default function KatalogClient() {
           statusLabel: x.statusLabel,
         })
       );
+
+      
+      // type label longgar
+      if (filters.type && filters.type !== "all") {
+        const want = filters.type.toLowerCase();
+        list = list.filter((x: any) => {
+          const tl = String(x.typeLabel || x.source || "").toLowerCase();
+          if (want === "manhwa") return tl.includes("manhwa") || tl.includes("omega") || tl.includes("fullmanhwa");
+          if (want === "manhua") return tl.includes("manhua");
+          if (want === "manga") return tl.includes("manga") || tl.includes("mangadex") || tl.includes("komik");
+          return true;
+        });
+      }
+      // genre: cocokkan nama di x.genres (array/string) — jika item tanpa genre, tetap tampil
+      if (filters.genres && filters.genres.length) {
+        const gs = filters.genres.map((g: string) => g.toLowerCase());
+        list = list.filter((x: any) => {
+          const raw = x.genres || x.tags || [];
+          const arr = Array.isArray(raw) ? raw : [raw];
+          const names = arr.map((g: any) => String(g?.name || g || "").toLowerCase());
+          if (!names.length || names.every((n: string) => !n)) return true; // no genre data = jangan buang
+          return gs.some((g: string) => names.some((n: string) => n.includes(g)));
+        });
+      }
 
       if (filters.status !== "all") {
         const s = filters.status.toLowerCase();
