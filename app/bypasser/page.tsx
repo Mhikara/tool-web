@@ -23,26 +23,17 @@ export default function BypasserPage() {
     setCopied(false);
 
     try {
-      // Direct API Call ke KeyBypass.net
-      // Menggunakan format hwid kosong agar seolah-olah request bersih
-      const apiUrl = `https://api.keybypass.net/bypass?url=${encodeURIComponent(url)}&hwid=`;
-      
-      const res = await fetch(apiUrl, {
-        method: "GET",
-        headers: {
-          "Accept": "application/json"
-        }
-      });
-      
+      // Mengirim link ke Backend Vercel kita sendiri untuk menghindari blokir CORS
+      const res = await fetch(`/api/bypass?url=${encodeURIComponent(url)}`);
       const json = await res.json();
       
-      if (json.status === "success" && json.destination) {
-        setResult(json.destination);
+      if (res.ok && json.success) {
+        setResult(json.result);
       } else {
-        setError(json.message || "Gagal mem-bypass link. Pastikan link aktif.");
+        setError(json.error || "Gagal mem-bypass link. Pastikan link masih aktif.");
       }
     } catch (err) {
-      setError("Koneksi ke server bypass terputus.");
+      setError("Server internal error / timeout. Coba muat ulang halaman.");
     } finally {
       setLoading(false);
     }
@@ -93,7 +84,7 @@ export default function BypasserPage() {
               disabled={loading}
               className="w-full bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-900 font-bold text-lg py-4 rounded-2xl transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 flex justify-center items-center gap-2"
             >
-              {loading ? "Bypassing... (Powered by KeyBypass)" : "Bypass →"}
+              {loading ? "Menerobos Keamanan... (Tunggu sebentar)" : "Bypass →"}
             </button>
           </form>
 
