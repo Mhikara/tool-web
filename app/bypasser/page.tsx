@@ -22,57 +22,30 @@ export default function BypasserPage() {
     setResult("");
     setCopied(false);
 
-    let isSuccess = false;
-
-    // TAHAP 1: Coba lewat Server Vercel secara sembunyi-sembunyi
     try {
-      const res = await fetch(`/api/bypass?url=${encodeURIComponent(url)}`);
+      // Direct API Call ke KeyBypass.net
+      // Menggunakan format hwid kosong agar seolah-olah request bersih
+      const apiUrl = `https://api.keybypass.net/bypass?url=${encodeURIComponent(url)}&hwid=`;
+      
+      const res = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+      
       const json = await res.json();
-      if (json.success && json.result) {
-        setResult(json.result);
-        isSuccess = true;
+      
+      if (json.status === "success" && json.destination) {
+        setResult(json.destination);
+      } else {
+        setError(json.message || "Gagal mem-bypass link. Pastikan link aktif.");
       }
     } catch (err) {
-      console.log("Server gagal merespon.");
+      setError("Koneksi ke server bypass terputus.");
+    } finally {
+      setLoading(false);
     }
-
-    // TAHAP 2: Jika Server Vercel Diblokir (Gagal), gunakan IP HP Pengguna (Client-Side)
-    if (!isSuccess) {
-      try {
-        const clientRes = await fetch(`https://api.bypass.city/bypass?url=${encodeURIComponent(url)}`);
-        const clientJson = await clientRes.json();
-        const resUrl = clientJson.url || clientJson.destination || clientJson.result;
-        
-        if (resUrl && resUrl.startsWith("http")) {
-          setResult(resUrl);
-          isSuccess = true;
-        }
-      } catch (err) {
-        console.log("Bypass City Client Gagal");
-      }
-    }
-
-    // TAHAP 3: Coba API Client ke-2 jika masih gagal
-    if (!isSuccess) {
-      try {
-        const vipRes = await fetch(`https://api.bypass.vip/bypass?url=${encodeURIComponent(url)}`);
-        const vipJson = await vipRes.json();
-        
-        if (vipJson.result && vipJson.result.startsWith("http")) {
-          setResult(vipJson.result);
-          isSuccess = true;
-        }
-      } catch (err) {
-        console.log("Bypass VIP Client Gagal");
-      }
-    }
-
-    // Jika ke-3 tahap di atas gagal semua
-    if (!isSuccess) {
-      setError("Semua sistem Bypass (Server & IP Pengguna) gagal menebus Lootlabs ini. Link mungkin sudah rusak/kedaluwarsa atau Lootlabs baru saja mengupdate keamanannya hari ini.");
-    }
-
-    setLoading(false);
   };
 
   const copyResult = () => {
@@ -120,7 +93,7 @@ export default function BypasserPage() {
               disabled={loading}
               className="w-full bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-900 font-bold text-lg py-4 rounded-2xl transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 flex justify-center items-center gap-2"
             >
-              {loading ? "Menembus Keamanan... (Mohon tunggu hingga 15 detik)" : "Bypass →"}
+              {loading ? "Bypassing... (Powered by KeyBypass)" : "Bypass →"}
             </button>
           </form>
 
