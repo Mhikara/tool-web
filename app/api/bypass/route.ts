@@ -8,37 +8,46 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Masukkan link yang ingin di-bypass." }, { status: 400 });
   }
 
-  try {
-    // Menggunakan EthosBypass API (Sangat cepat & Tanpa Captcha)
-    const res = await fetch(`https://api.ethosservices.xyz/bypass?url=${encodeURIComponent(targetUrl)}`, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      // Set timeout jika API ngelag
-      signal: AbortSignal.timeout(15000)
-    });
-    
-    const data = await res.json();
+  // Daftar API Bypasser Terbaik (Multi-Provider Engine)
+  const bypassProviders = [
+    `https://api.bypass.vip/bypass?url=${encodeURIComponent(targetUrl)}`,
+    `https://bypass.pm/bypass2?url=${encodeURIComponent(targetUrl)}`,
+    `https://api.ethosservices.xyz/bypass?url=${encodeURIComponent(targetUrl)}`,
+    `https://ethos-api.vercel.app/api/bypass?url=${encodeURIComponent(targetUrl)}`,
+    `https://api.bypass.city/bypass?url=${encodeURIComponent(targetUrl)}`
+  ];
 
-    if (data.status === "success" || data.result) {
-      return NextResponse.json({ 
-        success: true, 
-        result: data.result || data.bypassed_link || "Bypass berhasil." 
-      });
-    } else {
-      return NextResponse.json({ error: "Gagal mem-bypass link ini. Mungkin tidak didukung." }, { status: 400 });
-    }
-
-  } catch (error: any) {
-    // Fallback ke API cadangan jika Ethos mati
+  // Mencoba API satu per satu secara berurutan
+  for (const apiUrl of bypassProviders) {
     try {
-      const fallbackRes = await fetch(`https://bypass.pm/bypass2?url=${encodeURIComponent(targetUrl)}`);
-      const fallbackData = await fallbackRes.json();
-      
-      if (fallbackData.success) {
-        return NextResponse.json({ success: true, result: fallbackData.destination });
+      const res = await fetch(apiUrl, {
+        headers: { 
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Accept": "application/json"
+        },
+        // Jangan biarkan Vercel hang, maksimal nunggu 7 detik per API
+        signal: AbortSignal.timeout(7000) 
+      });
+
+      if (!res.ok) continue; // Jika API down/error, langsung loncat ke API berikutnya
+
+      const data = await res.json();
+
+      // Tiap API beda format respon, kita tangkap semua kemungkinan key-nya:
+      const resultUrl = data.result || data.destination || data.bypassed_link || data.bypassed || data.url;
+
+      // Validasi apakah hasilnya benar-benar link (bukan tulisan error)
+      if (resultUrl && resultUrl.startsWith("http")) {
+        return NextResponse.json({ success: true, result: resultUrl });
       }
-      throw new Error();
-    } catch {
-      return NextResponse.json({ error: "Server Bypasser sedang sibuk atau link tidak valid." }, { status: 502 });
+    } catch (e) {
+      // Jika terjadi timeout atau error network di API ini, abaikan dan lanjut coba API lain
+      continue;
     }
   }
+
+  // Jika SEMUA API di atas gagal memecahkan link (Skenario terburuk)
+  return NextResponse.json({ 
+    error: "Semua server Bypasser gagal menembus keamanan link ini (Lootlabs/Linkvertise sedang kuat). Coba lagi beberapa saat." 
+  }, { status: 502 });
 }
