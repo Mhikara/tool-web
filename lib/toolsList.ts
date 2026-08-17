@@ -9,6 +9,14 @@ export type SimpleTool = {
 
 export const toolsList: SimpleTool[] = [
   {
+    title: "Premium Bypasser",
+    desc: "Bypass Linkvertise, Workink, & SC Key (No Captcha)",
+    href: "/bypasser",
+    icon: "🔓",
+    tag: "Tools",
+  },
+
+  {
     title: "Roblox SC Finder",
     desc: "Cari SC No Key & Anti-Patched (Real-Time)",
     href: "/roblox",
