@@ -39,7 +39,7 @@ export default function RobloxScriptFinder() {
   const handleSearch = async (searchQuery: string) => {
     if (!searchQuery) return;
     
-    setQuery(searchQuery); // Update text di input box
+    setQuery(searchQuery); 
     setLoading(true);
     setError("");
     setData([]);
@@ -93,7 +93,7 @@ export default function RobloxScriptFinder() {
           </button>
         </form>
 
-        {/* 7 REKOMENDASI PENCARIAN TERPOPULER */}
+        {/* REKOMENDASI PENCARIAN TERPOPULER */}
         <div className="mb-8">
           <p className="text-xs text-gray-400 mb-2 font-semibold">🔥 Pencarian Terpopuler:</p>
           <div className="flex flex-wrap gap-2">
@@ -136,27 +136,27 @@ export default function RobloxScriptFinder() {
             <div key={idx} className="bg-gray-800 p-5 rounded-xl border border-gray-700 flex flex-col hover:border-blue-500 transition-colors">
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-100">{item.title}</h2>
-                  <p className="text-sm text-blue-400 font-medium">Game: {item.game}</p>
+                  <h2 className="text-xl font-bold text-gray-100 line-clamp-1">{item.title}</h2>
+                  <p className="text-sm text-blue-400 font-medium line-clamp-1">Game: {item.game}</p>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded text-white ${item.source.includes('Live') ? 'bg-red-600 animate-pulse' : 'bg-gray-700'}`}>
+                <span className={`text-xs px-2 py-1 rounded text-white whitespace-nowrap ml-2 ${item.source.includes('Live') ? 'bg-red-600 animate-pulse' : 'bg-gray-700'}`}>
                   {item.source}
                 </span>
               </div>
               
-              {/* BAGIAN FITUR (SUDAH DIRAPIKAN AGAR TAMPIL KE BAWAH) */}
+              {/* BAGIAN FITUR */}
               <div className="mb-3 flex-1">
-                <span className="font-bold text-gray-200 block mb-2 text-sm">Fitur:</span>
-                <ul className="text-sm text-gray-400 space-y-1.5 ml-2">
+                <span className="font-bold text-gray-200 block mb-2 text-sm">Detail Fitur:</span>
+                <ul className="text-xs text-gray-400 space-y-2 ml-1">
                   {Array.isArray(item.features) ? (
                     item.features.map((feat: string, i: number) => (
-                      <li key={i} className="flex items-start gap-2 text-left">
+                      <li key={i} className="flex items-start gap-2 text-left leading-relaxed">
                         <span className="text-blue-500 shrink-0 mt-0.5">•</span>
                         <span className="break-words">{feat}</span>
                       </li>
                     ))
                   ) : (
-                    <li className="flex items-start gap-2">
+                    <li className="flex items-start gap-2 leading-relaxed">
                       <span className="text-blue-500 shrink-0 mt-0.5">•</span>
                       <span>{item.features}</span>
                     </li>
@@ -164,13 +164,34 @@ export default function RobloxScriptFinder() {
                 </ul>
               </div>
 
-              {/* KOTAK REKOMENDASI GAME (HANYA MUNCUL JIKA UNIVERSAL SCRIPT) */}
+              {/* KOTAK REKOMENDASI GAME SUPER DETAIL (UNIVERSAL SCRIPT) */}
               {item.game.toLowerCase().includes("universal") && (
-                <div className="mb-4 p-3 bg-indigo-900/30 border border-indigo-500/30 rounded-lg text-xs text-indigo-300 leading-relaxed">
-                  <strong className="text-indigo-400 block mb-1">💡 Tips Game untuk Universal SC:</strong>
-                  • <strong className="text-gray-300">Aimbot/ESP:</strong> Arsenal, Da Hood, Phantom Forces.<br/>
-                  • <strong className="text-gray-300">Fly/Noclip/Speed:</strong> Brookhaven RP, Tower of Hell, Obby Games.<br/>
-                  • <strong className="text-gray-300">Auto Clicker:</strong> Ninja Legends, Pet Simulator, Clicker Games.
+                <div className="mb-4 p-4 bg-indigo-950/40 border border-indigo-500/40 rounded-xl text-xs text-indigo-200 leading-relaxed shadow-inner">
+                  <strong className="text-indigo-300 block mb-3 text-sm flex items-center gap-2">
+                    <span>💡</span> Panduan Penggunaan Universal SC:
+                  </strong>
+                  <div className="space-y-2.5">
+                    <p>
+                      <strong className="text-red-400">🔫 FPS & Shooter (Aimbot/ESP):</strong><br/>
+                      <span className="text-gray-300">Sangat cocok dieksekusi di game seperti Arsenal, Da Hood, Phantom Forces, Counter Blox, Rivals, atau Energy Assault.</span>
+                    </p>
+                    <p>
+                      <strong className="text-green-400">🏃‍♂️ Obby & Parkour (Fly/Noclip/Jump):</strong><br/>
+                      <span className="text-gray-300">Gunakan untuk curang di Tower of Hell, Mega Easy Obby, Flood Escape 2, atau Juke's Towers of Hell.</span>
+                    </p>
+                    <p>
+                      <strong className="text-yellow-400">🎭 Roleplay & Hangout (Speed/Troll/Fling):</strong><br/>
+                      <span className="text-gray-300">Sangat seru untuk mengganggu player di Brookhaven 🏡 RP, MeepCity, Adopt Me!, Livetopia, atau Berry Avenue.</span>
+                    </p>
+                    <p>
+                      <strong className="text-purple-400">😱 Horror & Survival (ESP/Fullbright):</strong><br/>
+                      <span className="text-gray-300">Bisa melihat monster tembus pandang di DOORS, Piggy, Evade, Flee the Facility, dan Survive the Killer.</span>
+                    </p>
+                    <p>
+                      <strong className="text-cyan-400">⚔️ Simulator (Auto Click/Teleport):</strong><br/>
+                      <span className="text-gray-300">Membantu grinding di Ninja Legends, Bee Swarm Simulator, atau Pet Simulator 99.</span>
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -180,7 +201,7 @@ export default function RobloxScriptFinder() {
                 </pre>
                 <button
                   onClick={() => copyToClipboard(item.scriptCode, idx)}
-                  className={`w-full py-2 rounded font-bold transition flex items-center justify-center gap-2 ${
+                  className={`w-full py-2.5 rounded-lg font-bold transition flex items-center justify-center gap-2 ${
                     copiedIndex === idx ? "bg-green-600 text-white" : "bg-gray-700 hover:bg-gray-600 text-gray-200"
                   }`}
                 >
