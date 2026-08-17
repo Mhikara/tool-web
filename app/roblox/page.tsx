@@ -8,8 +8,8 @@ export default function RobloxScriptFinder() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [activeSearch, setActiveSearch] = useState(""); // Menyimpan kata kunci yang sedang dicari
 
-  // Otomatis Fetch Data Terbaru (Live Upload) Saat Web Dibuka
   useEffect(() => {
     const fetchLiveUpload = async () => {
       try {
@@ -36,6 +36,7 @@ export default function RobloxScriptFinder() {
     setLoading(true);
     setError("");
     setData([]);
+    setActiveSearch(query);
 
     try {
       const res = await fetch(`/api/roblox?q=${encodeURIComponent(query)}`);
@@ -66,7 +67,8 @@ export default function RobloxScriptFinder() {
         <h1 className="text-3xl font-bold text-center mb-2 text-blue-400">Roblox SC Finder</h1>
         <p className="text-center text-gray-400 mb-8">Cari Script No Key & Anti-Patched secara Real-Time</p>
 
-        <form onSubmit={handleSearch} className="flex gap-2 mb-8">
+        {/* Form Pencarian */}
+        <form onSubmit={handleSearch} className="flex gap-2 mb-6">
           <input
             type="text"
             placeholder="Cari game (misal: Blox Fruits)..."
@@ -83,23 +85,45 @@ export default function RobloxScriptFinder() {
           </button>
         </form>
 
+        {/* Panduan Kamus Fitur (Mini Guide) */}
+        <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-8">
+          <h3 className="text-sm font-bold text-gray-200 mb-3 flex items-center gap-2">
+            <span>💡</span> Panduan Istilah Fitur SC:
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-400">
+            <p><strong className="text-blue-400">Auto Farm:</strong> Otomatis menaikkan level, uang, atau mengumpulkan item tanpa dimainkan.</p>
+            <p><strong className="text-blue-400">ESP (Wallhack):</strong> Melihat musuh, bos, atau item penting tembus pandang/dinding.</p>
+            <p><strong className="text-blue-400">Aimbot:</strong> Tembakan otomatis mengunci musuh (sangat berguna di game FPS).</p>
+            <p><strong className="text-blue-400">No Key:</strong> Script langsung aktif, tidak perlu verifikasi iklan di website lain.</p>
+            <p><strong className="text-blue-400">Anti-AFK:</strong> Mencegah akun keluar (ter-kick) otomatis jika ditinggal lama.</p>
+            <p><strong className="text-blue-400">Teleport/Tween:</strong> Berpindah tempat ke lokasi tertentu dengan sangat cepat.</p>
+          </div>
+        </div>
+
         {error && <div className="text-red-400 text-center mb-4">{error}</div>}
 
-        {/* Indikator Animasi Live Upload */}
-        {!query && !loading && !error && data.length > 0 && (
-          <div className="mb-6 text-center">
-            <span className="bg-red-600/20 text-red-400 border border-red-500/50 text-xs font-bold px-4 py-2 rounded-full animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.5)]">
-              🔴 LIVE UPLOAD (TERBARU)
-            </span>
+        {/* Indikator Status (Pencarian vs Live Upload) */}
+        {!loading && !error && data.length > 0 && (
+          <div className="mb-6 flex flex-col items-center text-center">
+            {!activeSearch ? (
+              <span className="bg-red-600/20 text-red-400 border border-red-500/50 text-xs font-bold px-4 py-2 rounded-full animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.5)]">
+                🔴 LIVE UPLOAD (TERBARU GLOBAL)
+              </span>
+            ) : (
+              <span className="bg-blue-600/20 text-blue-400 border border-blue-500/50 text-sm font-bold px-4 py-2 rounded-full">
+                🔍 Menampilkan hasil pencarian: "{activeSearch}"
+              </span>
+            )}
           </div>
         )}
 
-        {loading && !query && (
+        {loading && !activeSearch && (
           <div className="text-center text-gray-400 mb-4 animate-pulse font-medium">
             Memuat script yang baru saja diunggah ke dunia...
           </div>
         )}
 
+        {/* Menampilkan Kartu Data */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {data.map((item, idx) => (
             <div key={idx} className="bg-gray-800 p-5 rounded-xl border border-gray-700 flex flex-col hover:border-blue-500 transition-colors">
