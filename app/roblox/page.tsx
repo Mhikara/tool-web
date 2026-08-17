@@ -2,6 +2,17 @@
 
 import { useState, useEffect } from "react";
 
+// 7 Game Populer untuk Rekomendasi Pencarian
+const TRENDING_SEARCHES = [
+  "Blox Fruits",
+  "Pet Simulator 99",
+  "Arsenal",
+  "Brookhaven",
+  "Da Hood",
+  "Anime Defenders",
+  "Blade Ball"
+];
+
 export default function RobloxScriptFinder() {
   const [query, setQuery] = useState("");
   const [data, setData] = useState<any[]>([]);
@@ -25,17 +36,17 @@ export default function RobloxScriptFinder() {
     fetchLiveUpload();
   }, []);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query) return;
+  const handleSearch = async (searchQuery: string) => {
+    if (!searchQuery) return;
     
+    setQuery(searchQuery); // Update text di input box
     setLoading(true);
     setError("");
     setData([]);
-    setActiveSearch(query);
+    setActiveSearch(searchQuery);
 
     try {
-      const res = await fetch(`/api/roblox?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/roblox?q=${encodeURIComponent(searchQuery)}`);
       const json = await res.json();
       if (res.ok) {
         setData(json.results || []);
@@ -60,12 +71,15 @@ export default function RobloxScriptFinder() {
     <div className="min-h-screen bg-gray-900 text-white p-6 font-sans">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold text-center mb-2 text-blue-400">Roblox SC Finder</h1>
-        <p className="text-center text-gray-400 mb-8">Cari Script No Key & Anti-Patched secara Real-Time</p>
+        <p className="text-center text-gray-400 mb-6">Cari Script No Key & Anti-Patched secara Real-Time</p>
 
-        <form onSubmit={handleSearch} className="flex gap-2 mb-6">
+        <form 
+          onSubmit={(e) => { e.preventDefault(); handleSearch(query); }} 
+          className="flex gap-2 mb-4"
+        >
           <input
             type="text"
-            placeholder="Cari game (misal: Anime Card Farm)..."
+            placeholder="Cari game (misal: Blox Fruits)..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="flex-1 p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-blue-500"
@@ -75,9 +89,25 @@ export default function RobloxScriptFinder() {
             disabled={loading}
             className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-semibold transition disabled:bg-gray-600"
           >
-            {loading && query ? "Mencari..." : "Cari"}
+            {loading && query === activeSearch ? "Mencari..." : "Cari"}
           </button>
         </form>
+
+        {/* 7 REKOMENDASI PENCARIAN TERPOPULER */}
+        <div className="mb-8">
+          <p className="text-xs text-gray-400 mb-2 font-semibold">🔥 Pencarian Terpopuler:</p>
+          <div className="flex flex-wrap gap-2">
+            {TRENDING_SEARCHES.map((game) => (
+              <button
+                key={game}
+                onClick={() => handleSearch(game)}
+                className="bg-gray-800 hover:bg-blue-600/30 border border-gray-700 hover:border-blue-500 text-gray-300 hover:text-blue-400 text-xs px-3 py-1.5 rounded-full transition-all duration-200"
+              >
+                {game}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {error && <div className="text-red-400 text-center mb-4">{error}</div>}
 
@@ -114,19 +144,22 @@ export default function RobloxScriptFinder() {
                 </span>
               </div>
               
-              {/* BAGIAN FITUR (LIST) */}
+              {/* BAGIAN FITUR (SUDAH DIRAPIKAN AGAR TAMPIL KE BAWAH) */}
               <div className="mb-3 flex-1">
                 <span className="font-bold text-gray-200 block mb-2 text-sm">Fitur:</span>
                 <ul className="text-sm text-gray-400 space-y-1.5 ml-2">
                   {Array.isArray(item.features) ? (
                     item.features.map((feat: string, i: number) => (
-                      <li key={i} className="flex items-start gap-2">
+                      <li key={i} className="flex items-start gap-2 text-left">
                         <span className="text-blue-500 shrink-0 mt-0.5">•</span>
-                        <span>{feat}</span>
+                        <span className="break-words">{feat}</span>
                       </li>
                     ))
                   ) : (
-                    <li>{item.features}</li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-blue-500 shrink-0 mt-0.5">•</span>
+                      <span>{item.features}</span>
+                    </li>
                   )}
                 </ul>
               </div>
