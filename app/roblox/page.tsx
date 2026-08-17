@@ -114,8 +114,8 @@ export default function RobloxScriptFinder() {
                 </span>
               </div>
               
-              {/* BAGIAN FITUR (LIST KE BAWAH) */}
-              <div className="mb-4 flex-1">
+              {/* BAGIAN FITUR (LIST) */}
+              <div className="mb-3 flex-1">
                 <span className="font-bold text-gray-200 block mb-2 text-sm">Fitur:</span>
                 <ul className="text-sm text-gray-400 space-y-1.5 ml-2">
                   {Array.isArray(item.features) ? (
@@ -130,6 +130,16 @@ export default function RobloxScriptFinder() {
                   )}
                 </ul>
               </div>
+
+              {/* KOTAK REKOMENDASI GAME (HANYA MUNCUL JIKA UNIVERSAL SCRIPT) */}
+              {item.game.toLowerCase().includes("universal") && (
+                <div className="mb-4 p-3 bg-indigo-900/30 border border-indigo-500/30 rounded-lg text-xs text-indigo-300 leading-relaxed">
+                  <strong className="text-indigo-400 block mb-1">💡 Tips Game untuk Universal SC:</strong>
+                  • <strong className="text-gray-300">Aimbot/ESP:</strong> Arsenal, Da Hood, Phantom Forces.<br/>
+                  • <strong className="text-gray-300">Fly/Noclip/Speed:</strong> Brookhaven RP, Tower of Hell, Obby Games.<br/>
+                  • <strong className="text-gray-300">Auto Clicker:</strong> Ninja Legends, Pet Simulator, Clicker Games.
+                </div>
+              )}
 
               <div className="relative mt-auto">
                 <pre className="bg-black p-3 rounded-lg text-xs text-green-400 overflow-x-auto h-24 mb-3 border border-gray-700 scrollbar-thin">
