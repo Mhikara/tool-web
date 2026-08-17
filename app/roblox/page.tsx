@@ -1,13 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function RobloxScriptFinder() {
   const [query, setQuery] = useState("");
   const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  // Otomatis Fetch Data Terbaru (Live Upload) Saat Web Dibuka
+  useEffect(() => {
+    const fetchLiveUpload = async () => {
+      try {
+        const res = await fetch(`/api/roblox`);
+        const json = await res.json();
+        if (res.ok) {
+          setData(json.results || []);
+        } else {
+          setError(json.error || "Gagal memuat rekomendasi live.");
+        }
+      } catch (err) {
+        setError("Gagal terhubung ke server.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLiveUpload();
+  }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +57,7 @@ export default function RobloxScriptFinder() {
   const copyToClipboard = (code: string, index: number) => {
     navigator.clipboard.writeText(code);
     setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2000); // Reset tulisan copy setelah 2 detik
+    setTimeout(() => setCopiedIndex(null), 2000);
   };
 
   return (
@@ -57,23 +77,38 @@ export default function RobloxScriptFinder() {
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-semibold transition"
+            className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-semibold transition disabled:bg-gray-600 disabled:cursor-not-allowed"
           >
-            {loading ? "Mencari..." : "Cari"}
+            {loading && query ? "Mencari..." : "Cari"}
           </button>
         </form>
 
         {error && <div className="text-red-400 text-center mb-4">{error}</div>}
 
+        {/* Indikator Animasi Live Upload */}
+        {!query && !loading && !error && data.length > 0 && (
+          <div className="mb-6 text-center">
+            <span className="bg-red-600/20 text-red-400 border border-red-500/50 text-xs font-bold px-4 py-2 rounded-full animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.5)]">
+              🔴 LIVE UPLOAD (TERBARU)
+            </span>
+          </div>
+        )}
+
+        {loading && !query && (
+          <div className="text-center text-gray-400 mb-4 animate-pulse font-medium">
+            Memuat script yang baru saja diunggah ke dunia...
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {data.map((item, idx) => (
-            <div key={idx} className="bg-gray-800 p-5 rounded-xl border border-gray-700 flex flex-col">
+            <div key={idx} className="bg-gray-800 p-5 rounded-xl border border-gray-700 flex flex-col hover:border-blue-500 transition-colors">
               <div className="flex justify-between items-start mb-3">
                 <div>
                   <h2 className="text-xl font-bold text-gray-100">{item.title}</h2>
                   <p className="text-sm text-blue-400 font-medium">Game: {item.game}</p>
                 </div>
-                <span className="bg-gray-700 text-xs px-2 py-1 rounded text-gray-300">
+                <span className={`text-xs px-2 py-1 rounded text-white ${item.source.includes('Live') ? 'bg-red-600 animate-pulse' : 'bg-gray-700'}`}>
                   {item.source}
                 </span>
               </div>

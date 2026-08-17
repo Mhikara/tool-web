@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 
-// 1. Sumber Pertama: ScriptBlox (Kode Lama yang Dipertahankan)
-async function fetchScriptBlox(query: string) {
+async function fetchScriptBlox(query: string | null) {
   try {
-    const res = await fetch(`https://scriptblox.com/api/script/search?q=${encodeURIComponent(query)}&mode=free&page=1`, {
+    // Jika tidak ada query, panggil endpoint 'fetch' untuk mengambil live upload terbaru
+    const url = query 
+      ? `https://scriptblox.com/api/script/search?q=${encodeURIComponent(query)}&mode=free&page=1`
+      : `https://scriptblox.com/api/script/fetch?page=1`; 
+
+    const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
       next: { revalidate: 0 }
     });
@@ -17,17 +21,20 @@ async function fetchScriptBlox(query: string) {
         game: sc.game.name,
         features: sc.features || "Tidak ada deskripsi",
         scriptCode: sc.script,
-        source: "ScriptBlox"
+        source: query ? "ScriptBlox" : "Live Update"
       }));
   } catch {
     return [];
   }
 }
 
-// 2. Sumber Kedua: Rscripts (Sumber Tambahan Baru)
-async function fetchRscripts(query: string) {
+async function fetchRscripts(query: string | null) {
   try {
-    const res = await fetch(`https://rscripts.net/api/scripts?q=${encodeURIComponent(query)}`, {
+    const url = query
+      ? `https://rscripts.net/api/scripts?q=${encodeURIComponent(query)}`
+      : `https://rscripts.net/api/scripts`;
+
+    const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0" },
       next: { revalidate: 0 }
     });
@@ -35,13 +42,13 @@ async function fetchRscripts(query: string) {
     if (!data || !data.scripts) return [];
 
     return data.scripts
-      .filter((sc: any) => sc.status === "working") // Ambil yang masih works
+      .filter((sc: any) => sc.status === "working")
       .map((sc: any) => ({
         title: sc.title,
         game: sc.game,
         features: "Verified by Rscripts",
         scriptCode: sc.code || `loadstring(game:HttpGet("https://rscripts.net/raw/${sc.id}"))()`,
-        source: "Rscripts"
+        source: query ? "Rscripts" : "Live Update"
       }));
   } catch {
     return [];
@@ -52,23 +59,24 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q");
 
-  if (!query) {
-    return NextResponse.json({ error: "Masukkan keyword, contoh: ?q=bloxfruits" }, { status: 400 });
-  }
-
   try {
-    // Menjalankan pencarian ke semua sumber secara bersamaan (Real-Time & Cepat)
     const [scriptbloxResults, rscriptsResults] = await Promise.all([
       fetchScriptBlox(query),
       fetchRscripts(query)
     ]);
 
-    // Menggabungkan hasil
-    const combinedResults = [...scriptbloxResults, ...rscriptsResults];
+    let combinedResults = [...scriptbloxResults, ...rscriptsResults];
+
+    // Jika Mode Live Upload (tidak mencari sesuatu), acak datanya dan ambil 10 script terbaru
+    if (!query) {
+      combinedResults = combinedResults
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 10);
+    }
 
     return NextResponse.json({
-      query,
-      note: "Data real-time dari multi-sumber (No Key & Working)",
+      query: query || "live-upload",
+      note: "Data real-time (No Key & Working)",
       total: combinedResults.length,
       results: combinedResults
     });
