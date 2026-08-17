@@ -6,6 +6,8 @@ export const maxDuration = 30;
 const MD = "https://api.mangadex.org";
 const OMEGA = "https://api.omegascans.org";
 const FM = "https://fullmanhwa.com";
+/** false = list/detail OK, baca chapter FM ditolak */
+const FM_READ_ENABLED = false;
 const KM = "https://komiku.org";
 const MG = "https://mgread.io";
 const UA = "tool-web-komik/1.1";
@@ -1238,9 +1240,19 @@ const mangaId = parsed.key;
       const raw = chapterId || id || sp.get("url") || "";
 
       if (raw.startsWith("fm:")) {
+        if (!FM_READ_ENABLED) {
+          return NextResponse.json(
+            {
+              error:
+                "Baca chapter FullManhwa dinonaktifkan (sumber sering HTTP 500). Pakai Omega / Komiku / MangaDex.",
+              code: "FM_READ_DISABLED",
+              suggest: ["omega", "komiku", "mangadex"],
+            },
+            { status: 503 }
+          );
+        }
         const body = raw.replace(/^fm:/, "");
         const [slug, chapterSlug = "chapter-1"] = body.split("/");
-
         try {
           const data = await fmRead(slug, chapterSlug);
           return NextResponse.json(data);
