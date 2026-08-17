@@ -7,7 +7,15 @@ export type SimpleTool = {
   href: string;
 };
 
-export const toolsList: SimpleTool[] = [
+export const toolsList: SimpleTool[
+  {
+    title: "Roblox SC Finder",
+    desc: "Cari SC No Key & Anti-Patched (Real-Time)",
+    href: "/roblox",
+    icon: "🎮",
+    tag: "Tools",
+  },
+] = [
   {
     slug: "baca-komik",
     title: "Baca Komik",
