@@ -8,18 +8,14 @@ export default function RobloxScriptFinder() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [activeSearch, setActiveSearch] = useState(""); // Menyimpan kata kunci yang sedang dicari
+  const [activeSearch, setActiveSearch] = useState("");
 
   useEffect(() => {
     const fetchLiveUpload = async () => {
       try {
         const res = await fetch(`/api/roblox`);
         const json = await res.json();
-        if (res.ok) {
-          setData(json.results || []);
-        } else {
-          setError(json.error || "Gagal memuat rekomendasi live.");
-        }
+        if (res.ok) setData(json.results || []);
       } catch (err) {
         setError("Gagal terhubung ke server.");
       } finally {
@@ -41,7 +37,6 @@ export default function RobloxScriptFinder() {
     try {
       const res = await fetch(`/api/roblox?q=${encodeURIComponent(query)}`);
       const json = await res.json();
-      
       if (res.ok) {
         setData(json.results || []);
         if (json.results.length === 0) setError("Script tidak ditemukan.");
@@ -67,11 +62,10 @@ export default function RobloxScriptFinder() {
         <h1 className="text-3xl font-bold text-center mb-2 text-blue-400">Roblox SC Finder</h1>
         <p className="text-center text-gray-400 mb-8">Cari Script No Key & Anti-Patched secara Real-Time</p>
 
-        {/* Form Pencarian */}
         <form onSubmit={handleSearch} className="flex gap-2 mb-6">
           <input
             type="text"
-            placeholder="Cari game (misal: Blox Fruits)..."
+            placeholder="Cari game (misal: Anime Card Farm)..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="flex-1 p-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-blue-500"
@@ -79,30 +73,14 @@ export default function RobloxScriptFinder() {
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-semibold transition disabled:bg-gray-600 disabled:cursor-not-allowed"
+            className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-semibold transition disabled:bg-gray-600"
           >
             {loading && query ? "Mencari..." : "Cari"}
           </button>
         </form>
 
-        {/* Panduan Kamus Fitur (Mini Guide) */}
-        <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 mb-8">
-          <h3 className="text-sm font-bold text-gray-200 mb-3 flex items-center gap-2">
-            <span>💡</span> Panduan Istilah Fitur SC:
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-gray-400">
-            <p><strong className="text-blue-400">Auto Farm:</strong> Otomatis menaikkan level, uang, atau mengumpulkan item tanpa dimainkan.</p>
-            <p><strong className="text-blue-400">ESP (Wallhack):</strong> Melihat musuh, bos, atau item penting tembus pandang/dinding.</p>
-            <p><strong className="text-blue-400">Aimbot:</strong> Tembakan otomatis mengunci musuh (sangat berguna di game FPS).</p>
-            <p><strong className="text-blue-400">No Key:</strong> Script langsung aktif, tidak perlu verifikasi iklan di website lain.</p>
-            <p><strong className="text-blue-400">Anti-AFK:</strong> Mencegah akun keluar (ter-kick) otomatis jika ditinggal lama.</p>
-            <p><strong className="text-blue-400">Teleport/Tween:</strong> Berpindah tempat ke lokasi tertentu dengan sangat cepat.</p>
-          </div>
-        </div>
-
         {error && <div className="text-red-400 text-center mb-4">{error}</div>}
 
-        {/* Indikator Status (Pencarian vs Live Upload) */}
         {!loading && !error && data.length > 0 && (
           <div className="mb-6 flex flex-col items-center text-center">
             {!activeSearch ? (
@@ -119,11 +97,10 @@ export default function RobloxScriptFinder() {
 
         {loading && !activeSearch && (
           <div className="text-center text-gray-400 mb-4 animate-pulse font-medium">
-            Memuat script yang baru saja diunggah ke dunia...
+            Memuat script terbaru...
           </div>
         )}
 
-        {/* Menampilkan Kartu Data */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {data.map((item, idx) => (
             <div key={idx} className="bg-gray-800 p-5 rounded-xl border border-gray-700 flex flex-col hover:border-blue-500 transition-colors">
@@ -137,21 +114,38 @@ export default function RobloxScriptFinder() {
                 </span>
               </div>
               
-              <div className="text-sm text-gray-400 mb-4 flex-1">
-                <span className="font-semibold text-gray-300">Fitur:</span> {item.features}
+              {/* BAGIAN FITUR (LIST KE BAWAH) */}
+              <div className="mb-4 flex-1">
+                <span className="font-bold text-gray-200 block mb-2 text-sm">Fitur:</span>
+                <ul className="text-sm text-gray-400 space-y-1.5 ml-2">
+                  {Array.isArray(item.features) ? (
+                    item.features.map((feat: string, i: number) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="text-blue-500 shrink-0 mt-0.5">•</span>
+                        <span>{feat}</span>
+                      </li>
+                    ))
+                  ) : (
+                    <li>{item.features}</li>
+                  )}
+                </ul>
               </div>
 
-              <div className="relative">
-                <pre className="bg-black p-3 rounded-lg text-xs text-green-400 overflow-x-auto h-24 mb-3 border border-gray-700">
+              <div className="relative mt-auto">
+                <pre className="bg-black p-3 rounded-lg text-xs text-green-400 overflow-x-auto h-24 mb-3 border border-gray-700 scrollbar-thin">
                   {item.scriptCode}
                 </pre>
                 <button
                   onClick={() => copyToClipboard(item.scriptCode, idx)}
-                  className={`w-full py-2 rounded font-bold transition ${
+                  className={`w-full py-2 rounded font-bold transition flex items-center justify-center gap-2 ${
                     copiedIndex === idx ? "bg-green-600 text-white" : "bg-gray-700 hover:bg-gray-600 text-gray-200"
                   }`}
                 >
-                  {copiedIndex === idx ? "Berhasil Disalin! ✓" : "Copy Script"}
+                  {copiedIndex === idx ? (
+                    <><span>✓</span> Berhasil Disalin!</>
+                  ) : (
+                    <><span>📋</span> Copy Script</>
+                  )}
                 </button>
               </div>
             </div>

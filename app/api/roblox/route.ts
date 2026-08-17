@@ -1,32 +1,57 @@
 import { NextResponse } from "next/server";
 
-// Fungsi Pintar untuk menebak fitur berdasarkan judul jika deskripsi kosong
+// Fungsi Pintar untuk merapikan fitur menjadi list array
 function getSmartFeatures(title: string, originalFeat: string | null) {
-  // Jika deskripsi asli ada dan cukup panjang, gunakan yang asli
-  if (originalFeat && originalFeat.trim().length > 3 && originalFeat !== "Tidak ada deskripsi") {
-    return originalFeat;
-  }
-  
-  // Jika kosong, tebak dari kata kunci pada judul
   const t = title.toLowerCase();
-  const feats = [];
+  const feats: string[] = [];
   
-  if (t.includes("auto") || t.includes("farm")) feats.push("✅ Auto Farm / Quest");
-  if (t.includes("esp") || t.includes("wallhack") || t.includes("chams")) feats.push("👁️ ESP (Tembus Pandang)");
-  if (t.includes("aimbot") || t.includes("aim")) feats.push("🎯 Aimbot (Auto Target)");
-  if (t.includes("hub") || t.includes("gui") || t.includes("menu") || t.includes("panel") || t.includes("creator")) feats.push("🎛️ Menu Multi-Fitur Lengkap (GUI)");
-  if (t.includes("admin")) feats.push("👑 Admin Commands");
-  if (t.includes("heal") || t.includes("god")) feats.push("💖 God Mode / Auto Heal");
-  if (t.includes("speed") || t.includes("walkspeed")) feats.push("⚡ Speed Hack");
-  if (t.includes("teleport") || t.includes("tween")) feats.push("🚀 Teleportasi");
-  
-  // Jika berhasil menebak
-  if (feats.length > 0) {
-    return feats.join(" | ") + " & lainnya.";
+  // Tebak fitur dari judul
+  if (t.includes("auto") || t.includes("farm") || t.includes("spawn") || t.includes("collect") || t.includes("upgrade")) {
+    feats.push("🤖 Auto Farm — Farming/kumpulkan item otomatis");
   }
-  
-  // Jika tidak ada kata kunci yang cocok, jadikan judul sebagai penjelasan fungsinya
-  return `Fungsi khusus: ${title}`; 
+  if (t.includes("esp") || t.includes("wallhack") || t.includes("chams")) {
+    feats.push("👁️ ESP — Melihat musuh/item tembus pandang");
+  }
+  if (t.includes("aimbot") || t.includes("aim")) {
+    feats.push("🎯 Aimbot — Otomatis mengunci target");
+  }
+  if (t.includes("admin")) {
+    feats.push("👑 Admin Commands — Akses perintah admin");
+  }
+  if (t.includes("heal") || t.includes("god")) {
+    feats.push("💖 God Mode — Auto heal atau kebal damage");
+  }
+  if (t.includes("speed") || t.includes("walkspeed")) {
+    feats.push("⚡ Speed Hack — Jalan/lari sangat cepat");
+  }
+  if (t.includes("teleport") || t.includes("tween")) {
+    feats.push("🚀 Teleport — Pindah tempat instan");
+  }
+  if (t.includes("hub") || t.includes("gui") || t.includes("panel") || t.includes("menu")) {
+    feats.push("🎛️ GUI Menu — Panel dengan multi-fitur lengkap");
+  }
+
+  // Ekstrak deskripsi asli dari kreator jika ada
+  if (originalFeat && originalFeat.trim().length > 3 && originalFeat !== "Tidak ada deskripsi") {
+    // Bersihkan HTML tags jika ada, dan batasi
+    const cleanFeat = originalFeat.replace(/<[^>]*>?/gm, '');
+    const items = cleanFeat.split(/[,|]/).slice(0, 3); // Ambil maks 3 fitur asli
+    items.forEach(item => {
+      if (item.trim().length > 2 && !t.includes(item.trim().toLowerCase())) {
+         feats.push(`✨ ${item.trim()}`);
+      }
+    });
+  }
+
+  // Jika tetap kosong
+  if (feats.length === 0) {
+    feats.push(`✨ Mendukung fungsi spesifik untuk game ini`);
+  }
+
+  // Tambahkan jaminan No Key di akhir (seperti di gambar)
+  feats.push("🔓 Keyless / No Key");
+
+  return feats;
 }
 
 async function fetchScriptBlox(query: string | null) {
@@ -43,8 +68,8 @@ async function fetchScriptBlox(query: string | null) {
       .filter((sc: any) => sc.key === false && !sc.isPatched)
       .map((sc: any) => ({
         title: sc.title,
-        game: sc.game.name || "Universal Script (Bisa di semua game)",
-        features: getSmartFeatures(sc.title, sc.features),
+        game: sc.game.name || "Universal Script",
+        features: getSmartFeatures(sc.title, sc.features), // Sekarang berbentuk Array List
         scriptCode: sc.script,
         source: query ? "ScriptBlox" : "Live Update"
       }));
@@ -67,7 +92,7 @@ async function fetchRscripts(query: string | null) {
       .filter((sc: any) => sc.status === "working")
       .map((sc: any) => ({
         title: sc.title,
-        game: sc.game || "Universal Script (Bisa di semua game)",
+        game: sc.game || "Universal Script",
         features: getSmartFeatures(sc.title, null),
         scriptCode: sc.code || `loadstring(game:HttpGet("https://rscripts.net/raw/${sc.id}"))()`,
         source: query ? "Rscripts" : "Live Update"
@@ -92,12 +117,11 @@ export async function GET(request: Request) {
     if (!query) {
       combinedResults = combinedResults
         .sort(() => Math.random() - 0.5)
-        .slice(0, 12); // Menampilkan 12 script terbaru secara acak
+        .slice(0, 12);
     }
 
     return NextResponse.json({
       query: query || "live-upload",
-      note: "Data real-time (No Key & Working)",
       total: combinedResults.length,
       results: combinedResults
     });
