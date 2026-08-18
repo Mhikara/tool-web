@@ -1,14 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-
-declare global {
-  interface Window {
-    hcaptcha?: any;
-    onHCaptchaVerify?: (token: string) => void;
-    onHCaptchaExpire?: () => void;
-  }
-}
+import { useState } from "react";
 
 export default function BypasserPage() {
   const [url, setUrl] = useState("");
@@ -16,65 +8,13 @@ export default function BypasserPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const widgetIdRef = useRef<string | null>(null);
-
-  // Load script hCaptcha secara dinamis
-  useEffect(() => {
-    window.onHCaptchaVerify = (token: string) => {
-      setCaptchaToken(token);
-      setError("");
-    };
-
-    window.onHCaptchaExpire = () => {
-      setCaptchaToken(null);
-    };
-
-    const scriptId = "hcaptcha-script";
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement("script");
-      script.id = scriptId;
-      script.src = "https://js.hcaptcha.com/1/api.js?render=explicit";
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        if (window.hcaptcha) {
-          try {
-            widgetIdRef.current = window.hcaptcha.render("hcaptcha-container", {
-              sitekey: "a5628859-9943-41ea-9c02-e25f69f21469",
-              theme: "dark",
-              callback: "onHCaptchaVerify",
-              "expired-callback": "onHCaptchaExpire",
-            });
-          } catch (e) {
-            console.error("Gagal inisialisasi hCaptcha:", e);
-          }
-        }
-      };
-      document.body.appendChild(script);
-    } else if (window.hcaptcha && !widgetIdRef.current) {
-      try {
-        widgetIdRef.current = window.hcaptcha.render("hcaptcha-container", {
-          sitekey: "a5628859-9943-41ea-9c02-e25f69f21469",
-          theme: "dark",
-          callback: "onHCaptchaVerify",
-          "expired-callback": "onHCaptchaExpire",
-        });
-      } catch (e) {}
-    }
-  }, []);
 
   const handleBypass = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
 
-    if (!url.startsWith("http")) {
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
       setError("Link harus diawali dengan http:// atau https://");
-      return;
-    }
-
-    if (!captchaToken) {
-      setError("Silakan centang verifikasi 'Aku manusia' terlebih dahulu.");
       return;
     }
 
@@ -83,30 +23,49 @@ export default function BypasserPage() {
     setResult("");
     setCopied(false);
 
-    try {
-      // Mengirim request bypass bersama token captcha yang valid
-      const targetApi = `https://api.keybypass.net/bypass?url=${encodeURIComponent(url)}&token=${encodeURIComponent(captchaToken)}&hwid=`;
-      
-      const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(targetApi)}`);
-      const json = await res.json();
-
-      const finalUrl = json.destination || json.result || json.bypassed_link || json.url;
-
-      if (json.status === "success" || (finalUrl && finalUrl.startsWith("http"))) {
-        setResult(finalUrl);
-      } else {
-        setError(json.message || "Gagal mem-bypass link. Pastikan link masih aktif.");
-      }
-    } catch (err) {
-      setError("Gagal terhubung ke server verifikasi. Coba ulangi kembali.");
-    } finally {
-      // Reset captcha setelah submit
-      if (window.hcaptcha && widgetIdRef.current) {
-        window.hcaptcha.reset(widgetIdRef.current);
-      }
-      setCaptchaToken(null);
+    // Deteksi jika link adalah Lootlabs (memerlukan sesi browser langsung)
+    if (url.includes("lootlabs.gg") || url.includes("loot-link.com")) {
+      setError(
+        "Lootlabs menggunakan proteksi anti-bot Cloudflare berbasis sesi IP aktif yang tidak mengizinkan API eksternal. Silakan lewati link ini langsung melalui browser."
+      );
       setLoading(false);
+      return;
     }
+
+    const providers = [
+      `https://api.bypass.vip/bypass?url=${encodeURIComponent(url)}`,
+      `https://api.bypass.city/bypass?url=${encodeURIComponent(url)}`,
+      `https://dl.dirbaio.dev/api/bypass?url=${encodeURIComponent(url)}`
+    ];
+
+    let resolvedUrl = "";
+
+    for (const apiUrl of providers) {
+      try {
+        const res = await fetch(apiUrl, {
+          signal: AbortSignal.timeout(10000)
+        });
+        if (!res.ok) continue;
+
+        const data = await res.json();
+        const output = data.destination || data.result || data.bypassed_link || data.url;
+
+        if (output && typeof output === "string" && output.startsWith("http")) {
+          resolvedUrl = output;
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    if (resolvedUrl) {
+      setResult(resolvedUrl);
+    } else {
+      setError("Gagal mem-bypass link ini. Format link mungkin tidak didukung atau server sedang sibuk.");
+    }
+
+    setLoading(false);
   };
 
   const copyResult = () => {
@@ -155,13 +114,8 @@ export default function BypasserPage() {
               disabled={loading}
               className="w-full bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-900 font-bold text-lg py-4 rounded-2xl transition-all transform hover:scale-[1.01] disabled:opacity-50 disabled:hover:scale-100 flex justify-center items-center gap-2"
             >
-              {loading ? "Memverifikasi & Bypassing..." : "Bypass →"}
+              {loading ? "Memproses Link..." : "Bypass →"}
             </button>
-
-            {/* Kotak Widget hCaptcha */}
-            <div className="flex justify-center my-2">
-              <div id="hcaptcha-container"></div>
-            </div>
           </form>
 
           {error && (
@@ -187,8 +141,9 @@ export default function BypasserPage() {
             </div>
           )}
         </div>
+
         <p className="text-gray-500 text-sm mt-10 text-center max-w-lg">
-          Support untuk Linkvertise, Workink, Lootlabs, Fluxus Key, Delta Key, dan shortener lainnya.
+          Optimal untuk Linkvertise, Work.ink, Sub2Unlock, Booster.ink, dan layanan shortener standar lainnya.
         </p>
       </div>
     </div>
