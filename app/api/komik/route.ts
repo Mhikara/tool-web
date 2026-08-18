@@ -3,12 +3,27 @@ import { NextResponse } from "next/server";
 // FLAG: Atur ke 'true' HANYA JIKA server FullManhwa sedang stabil/tidak HTTP 500
 const FM_READ_ENABLED = false;
 
+// HELPER: Format Tanggal ke Hari dan Bulan Indonesia (Misal: "Minggu, 12 Agustus")
+function formatWaktu(dateString: string) {
+  if (!dateString) return "Baru Saja";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  
+  const namaHari = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+  const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  
+  return `${namaHari[date.getDay()]}, ${date.getDate()} ${namaBulan[date.getMonth()]}`;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action") || "home";
   const id = searchParams.get("id");
   const chapterId = searchParams.get("chapter");
   const sourceFilter = (searchParams.get("source") || "semua").toLowerCase();
+  
+  // PENYESUAIAN: Menangkap parameter sort (update terbaru vs populer/rating)
+  const sort = searchParams.get("sort") || "update"; 
 
   try {
     // ---------------------------------------------------------
@@ -27,8 +42,15 @@ export async function GET(request: Request) {
           (async () => {
             try {
               let mdUrl = `https://api.mangadex.org/manga?includes[]=cover_art&limit=12&offset=${offset}&contentRating[]=safe&contentRating[]=suggestive`;
-              if (query) mdUrl += `&title=${encodeURIComponent(query)}`;
-              else mdUrl += `&order[updatedAt]=desc`;
+              
+              if (query) {
+                mdUrl += `&title=${encodeURIComponent(query)}`;
+              } else if (sort === "populer") {
+                // Mengikuti rating popularitas tertinggi
+                mdUrl += `&order[rating]=desc`;
+              } else {
+                mdUrl += `&order[updatedAt]=desc`;
+              }
               
               const res = await fetch(mdUrl, { signal: AbortSignal.timeout(4500) });
               if (!res.ok) return [];
@@ -37,12 +59,17 @@ export async function GET(request: Request) {
               return data.data?.map((manga: any) => {
                 const cover = manga.relationships?.find((r: any) => r.type === "cover_art");
                 const coverFile = cover?.attributes?.fileName;
+                const lastCh = manga.attributes.lastChapter;
+                
                 return {
                   id: `md:${manga.id}`,
                   title: manga.attributes.title?.en || manga.attributes.title?.id || manga.attributes.title?.["ja-ro"] || "Judul Tidak Diketahui",
                   cover: coverFile ? `https://uploads.mangadex.org/covers/${manga.id}/${coverFile}.512.jpg` : "",
                   type: manga.attributes.originalLanguage === "ko" ? "Manhwa" : manga.attributes.originalLanguage === "zh" ? "Manhua" : "Manga",
-                  source: "MangaDex"
+                  source: "MangaDex",
+                  // PENYESUAIAN: Tangkap Judul/Nomor Chapter & Format Hari/Bulan
+                  latestChapter: lastCh ? `Ch. ${lastCh}` : "Update Baru",
+                  updateOn: formatWaktu(manga.attributes.updatedAt || manga.attributes.createdAt)
                 };
               }) || [];
             } catch { return []; } 
@@ -55,22 +82,34 @@ export async function GET(request: Request) {
         tasks.push(
           (async () => {
             try {
-              const url = query ? `https://komiku.id/cari/?post_type=manga&s=${encodeURIComponent(query)}` : `https://komiku.id/`;
+              let url = `https://komiku.id/`;
+              if (query) {
+                url = `https://komiku.id/cari/?post_type=manga&s=${encodeURIComponent(query)}`;
+              } else if (sort === "populer") {
+                // Mengambil dari halaman Hot / Populer Komiku
+                url = `https://komiku.id/other/hot/`;
+              }
+
               const res = await fetch(url, { signal: AbortSignal.timeout(4500) });
               if (!res.ok) return [];
               
               const html = await res.text();
               const results: any[] = [];
-              const regex = /<div class="bge">[\s\S]*?<a href="\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+(?:src|data-src)="([^"]+)"[\s\S]*?<h[34][^>]*>([^<]+)<\/h[34]>/gi;
+              const regex = /<div class="bge">[\s\S]*?<a href="\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+(?:src|data-src)="([^"]+)"[\s\S]*?<h[34][^>]*>([^<]+)<\/h[34]>([\s\S]*?)<\/div>\s*<\/div>/gi;
               
               let match;
               while ((match = regex.exec(html)) !== null && results.length < 12) {
+                const extraHtml = match[4] || "";
+                const chMatch = extraHtml.match(/Chapter\s*[\d.]+/i);
+                
                 results.push({
                   id: `komiku:${match[1]}`,
                   title: match[3].replace(/<\/?[^>]+(>|$)/g, "").trim(),
                   cover: match[2].split("?")[0].trim(),
                   type: "Manhwa/Manhua (ID)",
-                  source: "Komiku"
+                  source: "Komiku",
+                  latestChapter: chMatch ? chMatch[0] : "Terbaru",
+                  updateOn: formatWaktu(new Date().toISOString()) // Set hari ini secara default untuk web scraping
                 });
               }
               return results;
@@ -84,22 +123,34 @@ export async function GET(request: Request) {
         tasks.push(
           (async () => {
             try {
-              const url = query ? `https://fullmanhwa.com/?s=${encodeURIComponent(query)}` : `https://fullmanhwa.com/`;
+              let url = `https://fullmanhwa.com/`;
+              if (query) {
+                url = `https://fullmanhwa.com/?s=${encodeURIComponent(query)}`;
+              } else if (sort === "populer") {
+                // Mengambil list Manhwa populer berdasarkan rating/views
+                url = `https://fullmanhwa.com/manga/?order=popular`;
+              }
+
               const res = await fetch(url, { signal: AbortSignal.timeout(4500) });
               if (!res.ok) return [];
               
               const html = await res.text();
               const results: any[] = [];
-              const regex = /<div class="bsx">[\s\S]*?<a href="[^"]*\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<div class="tt">\s*([^<]+)\s*<\/div>/gi;
+              const regex = /<div class="bsx">[\s\S]*?<a href="[^"]*\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<div class="tt">\s*([^<]+)\s*<\/div>([\s\S]*?)<\/a>/gi;
               
               let match;
               while ((match = regex.exec(html)) !== null && results.length < 12) {
+                const extraHtml = match[4] || "";
+                const chMatch = extraHtml.match(/<div class="epxs">([^<]+)<\/div>/i);
+                
                 results.push({
                   id: `fm:${match[1]}`,
                   title: match[3].trim(),
                   cover: match[2].trim(),
                   type: "Manhwa (ID)",
-                  source: "FullManhwa"
+                  source: "FullManhwa",
+                  latestChapter: chMatch ? chMatch[1].trim() : "Terbaru",
+                  updateOn: formatWaktu(new Date().toISOString())
                 });
               }
               return results;
@@ -161,18 +212,16 @@ export async function GET(request: Request) {
             const cTitle = ch.attributes.title;
             
             let finalTitle = "";
-            // PERBAIKAN: Format angka Chapter (Handle null / kosong / oneshot)
             if (cNum !== null && cNum !== undefined && cNum !== "") {
               finalTitle = `Ch. ${cNum}`;
             } else {
               finalTitle = "Oneshot / Extra";
             }
             
-            // PERBAIKAN: Format Judul Chapter (Hindari kata null atau 0)
             if (cTitle && cTitle !== "null" && cTitle.trim() !== "" && cTitle !== "0") {
               finalTitle += ` - ${cTitle}`;
             } else if (cNum === "0") {
-              finalTitle += " - Prolog"; // Chapter 0 yg tak berujul kita namai Prolog
+              finalTitle += " - Prolog";
             }
             
             return {
@@ -200,12 +249,9 @@ export async function GET(request: Request) {
         let match;
         while ((match = chRegex.exec(html)) !== null) {
           let chTitle = match[2].replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
-          
-          // PERBAIKAN: Jika judul chapter kosong/0, gunakan ID chapter-nya
           if (!chTitle || chTitle === "0") {
             chTitle = `Chapter ${match[1].replace(/[^0-9]/g, '') || 'Extra'}`;
           }
-
           if (chTitle.toLowerCase().includes("chapter") || chTitle.toLowerCase().includes("ch")) {
             chapters.push({ chapterId: match[1], title: chTitle, lang: "id" });
           }
