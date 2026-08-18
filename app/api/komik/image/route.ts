@@ -1,83 +1,47 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export const runtime = "nodejs";
-export const maxDuration = 30;
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const imageUrl = searchParams.get("url");
 
-function allowed(host: string) {
-  const h = host.toLowerCase();
-  return (
-    h.includes("omegascans") ||
-    h.includes("omega") ||
-    h.includes("fullmanhwa") ||
-    h.includes("manhwabuddy") ||
-    h.includes("mgread") ||
-    h.includes("komiku") ||
-    h.includes("mangadex") ||
-    h.includes("mangadex.network") ||
-    h.includes("uploads.mangadex") ||
-    /^imgsrv\d*\.com$/.test(h) ||
-    h.includes("mangaraw") ||
-    h.includes("fastcdn")
-  );
-}
+  if (!imageUrl) {
+    return new NextResponse("Missing URL parameter", { status: 400 });
+  }
 
-function refererFor(host: string) {
-  const h = host.toLowerCase();
-  if (h.includes("mangadex")) return "https://mangadex.org/";
-  if (h.includes("komiku")) return "https://komiku.org/";
-  if (h.includes("omegascans") || h.includes("omega"))
-    return "https://omegascans.org/";
-  if (h.includes("fullmanhwa")) return "https://fullmanhwa.com/";
-  return "https://www.google.com/";
-}
-
-export async function GET(req: NextRequest) {
   try {
-    const raw = req.nextUrl.searchParams.get("url") || "";
-    if (!raw) {
-      return NextResponse.json({ error: "url wajib" }, { status: 400 });
-    }
-    const target = new URL(raw);
-    if (!allowed(target.hostname)) {
-      return NextResponse.json({ error: "host diblokir" }, { status: 403 });
+    // Palsukan Referer dan User-Agent agar bebas blokir Anti-Hotlinking
+    let referer = "https://mangadex.org/";
+    if (imageUrl.includes("komiku.id") || imageUrl.includes("komiku.co.id")) {
+      referer = "https://komiku.id/";
+    } else if (imageUrl.includes("fullmanhwa")) {
+      referer = "https://fullmanhwa.com/";
     }
 
-    const res = await fetch(target.toString(), {
+    const res = await fetch(imageUrl, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        Accept: "image/avif,image/webp,image/*,*/*;q=0.8",
-        Referer: refererFor(target.hostname),
-        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": referer,
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
       },
-      next: { revalidate: 86400 },
-    } as RequestInit);
+      signal: AbortSignal.timeout(10000), // Timeout aman untuk load gambar
+    });
 
     if (!res.ok) {
-      return NextResponse.json(
-        { error: "upstream " + res.status },
-        { status: 502 }
-      );
+      return new NextResponse(`Failed to fetch image: ${res.status}`, { status: res.status });
     }
 
-    const buf = await res.arrayBuffer();
-    const ct = res.headers.get("content-type") || "image/jpeg";
+    const buffer = await res.arrayBuffer();
+    const contentType = res.headers.get("content-type") || "image/jpeg";
 
-    return new NextResponse(buf, {
-      status: 200,
+    return new NextResponse(buffer, {
       headers: {
-        "Content-Type": ct,
-        "Cache-Control":
-          "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400, immutable",
-        "CDN-Cache-Control": "public, max-age=604800",
-        "Vercel-CDN-Cache-Control": "public, max-age=604800",
-        "X-Content-Type-Options": "nosniff",
+        "Content-Type": contentType,
+        // Cache gambar secara permanen di browser/Vercel (1 Tahun)
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Access-Control-Allow-Origin": "*",
       },
     });
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || "proxy error" },
-      { status: 500 }
-    );
+  } catch (error) {
+    return new NextResponse("Error fetching external image", { status: 500 });
   }
 }

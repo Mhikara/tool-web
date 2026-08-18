@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-// FLAG: Atur ke 'true' HANYA JIKA server FullManhwa sedang stabil/tidak HTTP 500
 const FM_READ_ENABLED = false;
 
 function formatWaktu(dateString: string) {
@@ -19,6 +18,23 @@ function parseId(rawId: string) {
   return { prefix: "md", realId: rawId };
 }
 
+// Helper Response dengan CORS & Cache Control Vercel
+function createResponse(data: any, status = 200, isCacheable = false) {
+  const headers = new Headers({
+    "Access-Control-Allow-Origin": "*",
+    "Content-Type": "application/json",
+  });
+  
+  if (isCacheable) {
+    // Cache 12 Jam di CDN Vercel (43200 detik)
+    headers.set("Cache-Control", "s-maxage=43200, stale-while-revalidate");
+  } else {
+    headers.set("Cache-Control", "no-store, max-age=0");
+  }
+
+  return NextResponse.json(data, { status, headers });
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action") || "home";
@@ -34,17 +50,10 @@ export async function GET(request: Request) {
     if (action === "home" || action === "search" || action === "katalog") {
       const query = searchParams.get("q") || "";
       const page = Number(searchParams.get("page") || "1");
-      const offset = (page - 1) * 20;
+      const limit = 20;
+      const offset = (page - 1) * limit;
 
-      // PERBAIKAN: Konfigurasi Cache Next.js (Refresh 2x Sehari = 43200 Detik)
-      // Jika sedang mencari (query ada) atau sorting Populer, jangan di-cache lama.
-      const cacheTime = (query || sort === "populer" || page > 1) ? 0 : 43200;
-      
-      const fetchConfig: RequestInit = {
-        signal: AbortSignal.timeout(6000),
-        next: { revalidate: cacheTime }
-      };
-
+      const allowCache = (!query && sort !== "populer" && page === 1);
       const tasks: Promise<any[]>[] = [];
 
       // 1. ENGINE MANGADEX
@@ -52,12 +61,12 @@ export async function GET(request: Request) {
         tasks.push(
           (async () => {
             try {
-              let mdUrl = `https://api.mangadex.org/manga?includes[]=cover_art&limit=15&offset=${offset}`;
+              let mdUrl = `https://api.mangadex.org/manga?includes[]=cover_art&limit=${limit}&offset=${offset}`;
               if (query) mdUrl += `&title=${encodeURIComponent(query)}`;
               else if (sort === "populer") mdUrl += `&order[rating]=desc`;
               else mdUrl += `&order[updatedAt]=desc`;
               
-              const res = await fetch(mdUrl, fetchConfig);
+              const res = await fetch(mdUrl, { signal: AbortSignal.timeout(6000) });
               if (!res.ok) return [];
               
               const data = await res.json();
@@ -89,15 +98,15 @@ export async function GET(request: Request) {
               if (query) url = `https://komiku.id/cari/?post_type=manga&s=${encodeURIComponent(query)}`;
               else if (sort === "populer") url = `https://komiku.id/other/hot/`;
 
-              const res = await fetch(url, fetchConfig);
+              const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
               if (!res.ok) return [];
               
               const html = await res.text();
               const results: any[] = [];
-              const regex = /<div class="bge">[\s\S]*?<a href="\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+(?:src|data-src)="([^"]+)"[\s\S]*?<h[34][^>]*>([^<]+)<\/h[34]>([\s\S]*?)<\/div>\s*<\/div>/gi;
+              const regex = /<div class="bge">[\s\S]*?<a href="\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"[\s\S]*?<h[34][^>]*>([^<]+)<\/h[34]>([\s\S]*?)<\/div>\s*<\/div>/gi;
               
               let match;
-              while ((match = regex.exec(html)) !== null && results.length < 12) {
+              while ((match = regex.exec(html)) !== null && results.length < limit) {
                 const chMatch = (match[4] || "").match(/Chapter\s*[\d.]+/i);
                 results.push({
                   id: `komiku:${match[1]}`,
@@ -114,7 +123,7 @@ export async function GET(request: Request) {
           })()
         );
       }
-      
+
       // 3. ENGINE FULLMANHWA
       if (sourceFilter === "semua" || sourceFilter === "fullmanhwa") {
         tasks.push(
@@ -124,7 +133,7 @@ export async function GET(request: Request) {
               if (query) url = `https://fullmanhwa.com/?s=${encodeURIComponent(query)}`;
               else if (sort === "populer") url = `https://fullmanhwa.com/manga/?order=popular`;
 
-              const res = await fetch(url, fetchConfig);
+              const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
               if (!res.ok) return [];
               
               const html = await res.text();
@@ -132,7 +141,7 @@ export async function GET(request: Request) {
               const regex = /<div class="bsx">[\s\S]*?<a href="[^"]*\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<div class="tt">\s*([^<]+)\s*<\/div>([\s\S]*?)<\/a>/gi;
               
               let match;
-              while ((match = regex.exec(html)) !== null && results.length < 12) {
+              while ((match = regex.exec(html)) !== null && results.length < limit) {
                 const extraHtml = match[4] || "";
                 const chMatch = extraHtml.match(/<div class="epxs">([^<]+)<\/div>/i);
                 
@@ -155,7 +164,8 @@ export async function GET(request: Request) {
       const settled = await Promise.allSettled(tasks);
       const combined: any[] = [];
       settled.forEach(res => { if (res.status === "fulfilled" && Array.isArray(res.value)) combined.push(...res.value); });
-      return NextResponse.json({ success: true, data: combined });
+      
+      return createResponse({ success: true, data: combined }, 200, allowCache);
     }
 
     // ---------------------------------------------------------
@@ -169,7 +179,6 @@ export async function GET(request: Request) {
       let description = "Data komik tidak dapat dimuat atau sumber tidak dikenali.";
       let chapters: any[] = [];
 
-      // DETAIL: MANGADEX
       if (prefix === "md") {
         const [mangaRes, feedRes] = await Promise.allSettled([
           fetch(`https://api.mangadex.org/manga/${realId}?includes[]=cover_art`, { signal: AbortSignal.timeout(8000) }),
@@ -192,16 +201,12 @@ export async function GET(request: Request) {
           chapters = fData.data?.map((ch: any) => {
             const cNum = ch.attributes.chapter;
             const cTitle = ch.attributes.title;
-            
             let finalTitle = "";
             if (cNum !== null && cNum !== undefined && cNum !== "") finalTitle = `Ch. ${cNum}`;
             else finalTitle = "Oneshot / Extra";
             
-            if (cTitle && cTitle !== "null" && cTitle.trim() !== "" && cTitle !== "0") {
-              finalTitle += ` - ${cTitle}`;
-            } else if (cNum === "0") {
-              finalTitle = "Ch. 0 - Prolog"; 
-            }
+            if (cTitle && cTitle !== "null" && cTitle.trim() !== "" && cTitle !== "0") finalTitle += ` - ${cTitle}`;
+            else if (cNum === "0") finalTitle = "Ch. 0 - Prolog";
             
             return {
               chapterId: ch.id,
@@ -211,8 +216,6 @@ export async function GET(request: Request) {
           }) || [];
         }
       }
-
-      // DETAIL: KOMIKU
       else if (prefix === "komiku") {
         const res = await fetch(`https://komiku.id/manga/${realId}/`, { signal: AbortSignal.timeout(8000) });
         if (res.ok) {
@@ -236,8 +239,6 @@ export async function GET(request: Request) {
           }
         }
       }
-
-      // DETAIL: FULLMANHWA
       else if (prefix === "fm") {
         const res = await fetch(`https://fullmanhwa.com/manga/${realId}/`, { signal: AbortSignal.timeout(8000) });
         if (res.ok) {
@@ -259,14 +260,13 @@ export async function GET(request: Request) {
           }
         }
       }
-      
       else {
         title = `Komik Eksternal (${prefix})`;
         description = `Sumber web '${prefix}' saat ini sedang dalam masa pemeliharaan atau tidak didukung lagi.`;
         chapters = [ { chapterId: "error", title: "Pemberitahuan Sistem (Offline)", lang: "id" } ];
       }
 
-      return NextResponse.json({ success: true, title, cover: coverUrl, description, chapters, data: { title, cover: coverUrl, description, chapters } });
+      return createResponse({ success: true, title, cover: coverUrl, description, chapters, data: { title, cover: coverUrl, description, chapters } }, 200, true);
     }
 
     // ---------------------------------------------------------
@@ -276,45 +276,45 @@ export async function GET(request: Request) {
       const { prefix } = parseId(id);
 
       if (prefix === "fm" && !FM_READ_ENABLED) {
-        throw new Error("Server FullManhwa sedang tidak stabil (Rawan 500 Cloudflare). Silakan baca komik ini melalui sumber MangaDex atau Komiku.");
+        return createResponse({ error: "Server FullManhwa sedang tidak stabil (Rawan 500 Cloudflare). Silakan cari dari MangaDex/Komiku." }, 403);
       }
       if (prefix === "omega" || chapterId === "error") {
-        throw new Error("Sistem tidak dapat memuat gambar karena sumber dari web ini sedang offline atau dalam perbaikan.");
+        return createResponse({ error: "Sistem tidak dapat memuat gambar karena sumber dari web ini offline." }, 403);
       }
 
       if (prefix === "fm") {
         const res = await fetch(`https://fullmanhwa.com/${chapterId}/`, { signal: AbortSignal.timeout(9000) });
-        if (!res.ok) throw new Error("Gagal menghubungi server gambar FullManhwa.");
+        if (!res.ok) return createResponse({ error: "Gagal menghubungi server FullManhwa." }, 502);
         const html = await res.text();
         const readerArea = html.match(/<div id="readerarea"[^>]*>([\s\S]*?)<\/div>/i);
-        if (!readerArea) throw new Error("Area gambar tidak ditemukan di FullManhwa.");
+        if (!readerArea) return createResponse({ error: "Area gambar tidak ditemukan." }, 404);
         
         let images: string[] = [];
         const imgRegex = /<img[^>]+src="([^"]+)"/gi;
         let imgM;
         while ((imgM = imgRegex.exec(readerArea[1])) !== null) images.push(imgM[1].trim());
-        return NextResponse.json({ success: true, images });
+        return createResponse({ success: true, images }, 200, true);
       }
 
       if (prefix === "md") {
         const mdHost = await fetch(`https://api.mangadex.org/at-home/server/${chapterId}`, { signal: AbortSignal.timeout(9000) });
-        if (!mdHost.ok) throw new Error(`Gagal menghubungi server gambar MangaDex. Status: ${mdHost.status}`);
+        if (!mdHost.ok) return createResponse({ error: "Gagal menghubungi MangaDex." }, 502);
         
         const hostData = await mdHost.json();
-        if (hostData.result !== "ok" || !hostData.chapter) throw new Error("Sistem MangaDex menolak permintaan gambar.");
+        if (hostData.result !== "ok" || !hostData.chapter) return createResponse({ error: "Sistem MangaDex menolak permintaan." }, 403);
 
         const baseUrl = hostData.baseUrl;
         const hash = hostData.chapter.hash;
         const chapterImages = hostData.chapter.data?.length > 0 ? hostData.chapter.data : hostData.chapter.dataSaver || [];
-        if (chapterImages.length === 0) throw new Error("Tidak ada halaman gambar yang ditemukan.");
+        if (chapterImages.length === 0) return createResponse({ error: "Halaman kosong." }, 404);
 
         const images = chapterImages.map((file: string) => `${baseUrl}/data/${hash}/${file}`);
-        return NextResponse.json({ success: true, images });
+        return createResponse({ success: true, images }, 200, true); // Cache gambar MD yang aman
       }
 
       if (prefix === "komiku") {
          const res = await fetch(`https://komiku.id/ch/${chapterId}/`, { signal: AbortSignal.timeout(9000) });
-         if (!res.ok) throw new Error("Gagal menghubungi server gambar Komiku.");
+         if (!res.ok) return createResponse({ error: "Gagal menghubungi server Komiku." }, 502);
          const html = await res.text();
          const bcContentIndex = html.indexOf('id="bc"');
          let images: string[] = [];
@@ -328,16 +328,16 @@ export async function GET(request: Request) {
                if (!imgUrl.includes("gif") && !imgUrl.includes("banner")) images.push(imgUrl);
             }
          }
-         if (images.length === 0) throw new Error("Tidak ada halaman gambar yang ditemukan pada chapter Komiku ini.");
-         return NextResponse.json({ success: true, images });
+         if (images.length === 0) return createResponse({ error: "Gambar tidak ditemukan." }, 404);
+         return createResponse({ success: true, images }, 200, true); // Cache halaman bacaan
       }
       
-      throw new Error("Aksi baca tidak dikenali untuk sumber ini.");
+      return createResponse({ error: "Aksi baca tidak dikenali." }, 400);
     }
 
-    return NextResponse.json({ error: "Aksi tidak dikenali atau parameter kurang lengkap" }, { status: 400 });
+    return createResponse({ error: "Aksi tidak dikenali atau parameter kurang lengkap" }, 400);
 
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Terjadi kesalahan internal pada server backend" }, { status: 500 });
+    return createResponse({ error: error.message || "Terjadi kesalahan internal" }, 500);
   }
 }
