@@ -12,12 +12,11 @@ function formatWaktu(dateString: string) {
   return `${namaHari[date.getDay()]}, ${date.getDate()} ${namaBulan[date.getMonth()]}`;
 }
 
-// HELPER: Mencegah crash jika prefix/sumber komik tidak dikenali
 function parseId(rawId: string) {
   if (!rawId) return { prefix: "md", realId: "" };
   const parts = rawId.split(":");
   if (parts.length > 1) return { prefix: parts[0], realId: parts.slice(1).join(":") };
-  return { prefix: "md", realId: rawId }; // Default ke MangaDex jika tidak ada prefix
+  return { prefix: "md", realId: rawId };
 }
 
 export async function GET(request: Request) {
@@ -37,6 +36,15 @@ export async function GET(request: Request) {
       const page = Number(searchParams.get("page") || "1");
       const offset = (page - 1) * 20;
 
+      // PERBAIKAN: Konfigurasi Cache Next.js (Refresh 2x Sehari = 43200 Detik)
+      // Jika sedang mencari (query ada) atau sorting Populer, jangan di-cache lama.
+      const cacheTime = (query || sort === "populer" || page > 1) ? 0 : 43200;
+      
+      const fetchConfig: RequestInit = {
+        signal: AbortSignal.timeout(6000),
+        next: { revalidate: cacheTime }
+      };
+
       const tasks: Promise<any[]>[] = [];
 
       // 1. ENGINE MANGADEX
@@ -49,7 +57,7 @@ export async function GET(request: Request) {
               else if (sort === "populer") mdUrl += `&order[rating]=desc`;
               else mdUrl += `&order[updatedAt]=desc`;
               
-              const res = await fetch(mdUrl, { signal: AbortSignal.timeout(6000) });
+              const res = await fetch(mdUrl, fetchConfig);
               if (!res.ok) return [];
               
               const data = await res.json();
@@ -81,7 +89,7 @@ export async function GET(request: Request) {
               if (query) url = `https://komiku.id/cari/?post_type=manga&s=${encodeURIComponent(query)}`;
               else if (sort === "populer") url = `https://komiku.id/other/hot/`;
 
-              const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+              const res = await fetch(url, fetchConfig);
               if (!res.ok) return [];
               
               const html = await res.text();
@@ -98,6 +106,43 @@ export async function GET(request: Request) {
                   type: "Manhwa/Manhua (ID)",
                   source: "Komiku",
                   latestChapter: chMatch ? chMatch[0] : "Terbaru",
+                  updateOn: formatWaktu(new Date().toISOString())
+                });
+              }
+              return results;
+            } catch { return []; } 
+          })()
+        );
+      }
+      
+      // 3. ENGINE FULLMANHWA
+      if (sourceFilter === "semua" || sourceFilter === "fullmanhwa") {
+        tasks.push(
+          (async () => {
+            try {
+              let url = `https://fullmanhwa.com/`;
+              if (query) url = `https://fullmanhwa.com/?s=${encodeURIComponent(query)}`;
+              else if (sort === "populer") url = `https://fullmanhwa.com/manga/?order=popular`;
+
+              const res = await fetch(url, fetchConfig);
+              if (!res.ok) return [];
+              
+              const html = await res.text();
+              const results: any[] = [];
+              const regex = /<div class="bsx">[\s\S]*?<a href="[^"]*\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<div class="tt">\s*([^<]+)\s*<\/div>([\s\S]*?)<\/a>/gi;
+              
+              let match;
+              while ((match = regex.exec(html)) !== null && results.length < 12) {
+                const extraHtml = match[4] || "";
+                const chMatch = extraHtml.match(/<div class="epxs">([^<]+)<\/div>/i);
+                
+                results.push({
+                  id: `fm:${match[1]}`,
+                  title: match[3].trim(),
+                  cover: match[2].trim(),
+                  type: "Manhwa (ID)",
+                  source: "FullManhwa",
+                  latestChapter: chMatch ? chMatch[1].trim() : "Terbaru",
                   updateOn: formatWaktu(new Date().toISOString())
                 });
               }
@@ -155,7 +200,7 @@ export async function GET(request: Request) {
             if (cTitle && cTitle !== "null" && cTitle.trim() !== "" && cTitle !== "0") {
               finalTitle += ` - ${cTitle}`;
             } else if (cNum === "0") {
-              finalTitle = "Ch. 0 - Prolog"; // PERBAIKAN: Mutlak ganti jadi prolog jika 0 tanpa judul
+              finalTitle = "Ch. 0 - Prolog"; 
             }
             
             return {
@@ -215,10 +260,9 @@ export async function GET(request: Request) {
         }
       }
       
-      // DETAIL: SUMBER TIDAK DIKENAL (E.g. OMEGA)
       else {
         title = `Komik Eksternal (${prefix})`;
-        description = `Sumber web '${prefix}' saat ini sedang dalam masa pemeliharaan atau tidak didukung lagi. Anda tidak dapat membaca chapter dari sumber ini untuk sementara waktu.`;
+        description = `Sumber web '${prefix}' saat ini sedang dalam masa pemeliharaan atau tidak didukung lagi.`;
         chapters = [ { chapterId: "error", title: "Pemberitahuan Sistem (Offline)", lang: "id" } ];
       }
 
@@ -243,7 +287,7 @@ export async function GET(request: Request) {
         if (!res.ok) throw new Error("Gagal menghubungi server gambar FullManhwa.");
         const html = await res.text();
         const readerArea = html.match(/<div id="readerarea"[^>]*>([\s\S]*?)<\/div>/i);
-        if (!readerArea) throw new Error("Area gambar tidak ditemukan.");
+        if (!readerArea) throw new Error("Area gambar tidak ditemukan di FullManhwa.");
         
         let images: string[] = [];
         const imgRegex = /<img[^>]+src="([^"]+)"/gi;
