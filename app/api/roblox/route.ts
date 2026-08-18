@@ -55,140 +55,125 @@ function parseDetailedFeatures(title: string, rawFeatures: string | null): strin
   return feats;
 }
 
-// Sumber 1: ScriptBlox (Database Global)
+// 1. ScriptBlox Engine (Multi-Page Aggregator)
 async function fetchFromScriptBlox(query: string | null, page: number = 1): Promise<FormattedScript[]> {
   try {
     const endpoint = query
       ? `https://scriptblox.com/api/script/search?q=${encodeURIComponent(query)}&mode=free&page=${page}`
       : `https://scriptblox.com/api/script/fetch?page=${page}`;
-
-    const res = await fetch(endpoint, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
-      signal: AbortSignal.timeout(7000),
-    });
-
+    const res = await fetch(endpoint, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(7000) });
     if (!res.ok) return [];
     const data = await res.json();
     if (!data?.result?.scripts) return [];
-
-    return data.result.scripts
-      .filter((s: any) => !s.isPatched && s.script)
-      .map((s: any) => ({
-        title: s.title,
-        game: s.game?.name || (s.game ? String(s.game) : "Universal Script"),
-        features: parseDetailedFeatures(s.title, s.features),
-        scriptCode: s.script,
-        source: "ScriptBlox",
-        verified: s.verified || false,
-        keyless: s.key === false,
-        views: s.views || 0,
-      }));
-  } catch {
-    return [];
-  }
+    return data.result.scripts.filter((s: any) => !s.isPatched && s.script).map((s: any) => ({
+      title: s.title,
+      game: s.game?.name || (s.game ? String(s.game) : "Universal Script"),
+      features: parseDetailedFeatures(s.title, s.features),
+      scriptCode: s.script,
+      source: "ScriptBlox",
+      verified: s.verified || false,
+      keyless: s.key === false,
+      views: s.views || 0,
+    }));
+  } catch { return []; }
 }
 
-// Sumber 2: RawScripts / Rscripts Database
+// 2. RawScripts.net Engine
 async function fetchFromRawScripts(query: string | null): Promise<FormattedScript[]> {
   try {
     const endpoint = query
       ? `https://rawscripts.net/api/scripts?q=${encodeURIComponent(query)}`
       : `https://rawscripts.net/api/scripts`;
-
-    const res = await fetch(endpoint, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      signal: AbortSignal.timeout(7000),
-    });
-
+    const res = await fetch(endpoint, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(7000) });
     if (!res.ok) return [];
     const data = await res.json();
     if (!data?.scripts) return [];
-
-    return data.scripts
-      .filter((s: any) => s.status !== "patched")
-      .map((s: any) => ({
-        title: s.title,
-        game: s.game || "Universal Script",
-        features: parseDetailedFeatures(s.title, s.description || null),
-        scriptCode: s.code || `loadstring(game:HttpGet("https://rawscripts.net/raw/${s.id}"))()`,
-        source: "RawScripts",
-        verified: true,
-        keyless: true,
-        views: s.views || 0,
-      }));
-  } catch {
-    return [];
-  }
+    return data.scripts.filter((s: any) => s.status !== "patched").map((s: any) => ({
+      title: s.title,
+      game: s.game || "Universal Script",
+      features: parseDetailedFeatures(s.title, s.description || null),
+      scriptCode: s.code || `loadstring(game:HttpGet("https://rawscripts.net/raw/${s.id}"))()`,
+      source: "RawScripts",
+      verified: true,
+      keyless: true,
+    }));
+  } catch { return []; }
 }
 
-// Sumber 3: Curated Open-Source Hubs (GitHub Community Feed)
-function getCuratedGitHubHubs(query: string | null): FormattedScript[] {
+// 3. RScripts.net Engine (New Source!)
+async function fetchFromRScriptsNet(query: string | null, page: number = 1): Promise<FormattedScript[]> {
+  try {
+    const endpoint = query
+      ? `https://rscripts.net/api/scripts?q=${encodeURIComponent(query)}&page=${page}`
+      : `https://rscripts.net/api/scripts?page=${page}`;
+    const res = await fetch(endpoint, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(7000) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data?.scripts) return [];
+    return data.scripts.map((s: any) => ({
+      title: s.title,
+      game: s.game || "Universal Script",
+      features: parseDetailedFeatures(s.title, null),
+      scriptCode: s.code || `loadstring(game:HttpGet("https://rscripts.net/raw/${s.id}"))()`,
+      source: "Rscripts.net",
+      verified: true,
+      keyless: true,
+    }));
+  } catch { return []; }
+}
+
+// 4. Massive Curated Database (Hubs Populer Kelas Atas)
+function getCuratedHubs(query: string | null): FormattedScript[] {
   const hubs = [
-    {
-      title: "Infinite Yield Universal Admin",
-      game: "Universal Script",
-      features: parseDetailedFeatures("Infinite Yield Admin fly speed noclip btools", null),
-      scriptCode: `loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()`,
-      source: "GitHub Verified",
-      verified: true,
-      keyless: true,
-    },
-    {
-      title: "Redz Hub Official",
-      game: "Blox Fruits",
-      features: parseDetailedFeatures("Redz Hub auto farm quest level fruit esp", null),
-      scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/realredz/BloxFruits/main/Source.lua"))()`,
-      source: "GitHub Verified",
-      verified: true,
-      keyless: true,
-    },
-    {
-      title: "Speed Hub X",
-      game: "Fisch",
-      features: parseDetailedFeatures("Speed Hub autofish auto shake perfect catch esp", null),
-      scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua"))()`,
-      source: "GitHub Verified",
-      verified: true,
-      keyless: true,
-    },
-    {
-      title: "Dark Hub Aimbot & ESP",
-      game: "Arsenal",
-      features: parseDetailedFeatures("Dark Hub silent aim wallhack hitbox expander", null),
-      scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/RandomSv/DarkHub/main/Source"))()`,
-      source: "GitHub Verified",
-      verified: true,
-      keyless: true,
-    },
-    {
-      title: "Ghost Hub RP",
-      game: "Brookhaven 🏡 RP",
-      features: parseDetailedFeatures("Ghost Hub troll fling admin fly speed vehicle mod", null),
-      scriptCode: `loadstring(game:HttpGet('https://raw.githubusercontent.com/GhostPlayer-hub/GhostHub/main/GhostHub.lua'))()`,
-      source: "GitHub Verified",
-      verified: true,
-      keyless: true,
-    },
-    {
-      title: "Zap Hub Auto Collect",
-      game: "Pet Simulator 99",
-      features: parseDetailedFeatures("Zap Hub auto farm coins auto hatch auto tap", null),
-      scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/zaphub/ps99/main/script.lua"))()`,
-      source: "GitHub Verified",
-      verified: true,
-      keyless: true,
-    }
-  ];
+    // Blox Fruits
+    { title: "Hoho Hub (Terpopuler)", game: "Blox Fruits", scriptCode: `loadstring(game:HttpGet('https://raw.githubusercontent.com/acsu123/HOHO_H/main/Loading_UI'))()` },
+    { title: "Mukuro Hub", game: "Blox Fruits", scriptCode: `loadstring(game:HttpGet"https://raw.githubusercontent.com/xQuartyx/DonateMe/main/ScriptLoader")()` },
+    { title: "W Azure Hub", game: "Blox Fruits", scriptCode: `getgenv().Team = "Pirates"; loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/3b2169cf53bc6104dabe8e19562e5cc2.lua"))()` },
+    { title: "Thunder Z Hub", game: "Blox Fruits", scriptCode: `loadstring(game:HttpGet('https://raw.githubusercontent.com/ThunderZ-N/Hub/main/Mobile'))()` },
+    { title: "Neva Hub", game: "Blox Fruits", scriptCode: `loadstring(game:HttpGet('https://raw.githubusercontent.com/VEZ2/NEVAHUB/main/2'))()` },
+    { title: "Ripper Hub V3", game: "Blox Fruits", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/hajibeza/RIPPER-HUB/main/RIPPERHUBV3.lua"))()` },
+    { title: "Zen Hub", game: "Blox Fruits", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/Zenhubtop/zen_hub_pr/main/zennew.lua"))()` },
+    { title: "Redz Hub Official", game: "Blox Fruits", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/realredz/BloxFruits/main/Source.lua"))()` },
+    
+    // Pet Simulator 99
+    { title: "Zap Hub Auto Farm", game: "Pet Simulator 99", scriptCode: `loadstring(game:HttpGet("https://zaphub.xyz/Exec"))()` },
+    { title: "Baluga Hub", game: "Pet Simulator 99", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/gclich/Baluga/main/PS99.lua"))()` },
+    { title: "Snail Hub", game: "Pet Simulator 99", scriptCode: `loadstring(game:HttpGet('https://raw.githubusercontent.com/Snail422/Snail-Hub/main/PetSim99'))()` },
+    
+    // Shooter / FPS (Arsenal, Rivals, dll)
+    { title: "Owl Hub Aimbot", game: "Arsenal", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/ZinityDrops/OwlHubLink/master/OwlHub.txt"))()` },
+    { title: "Dark Hub", game: "Arsenal", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/RandomSv/DarkHub/main/Source"))()` },
+    { title: "Rivals Aimbot & ESP", game: "Rivals", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/Spoorloos/script/main/rivals.lua"))()` },
+    { title: "Energy Assault ESP", game: "Energy Assault", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/M1ZZT/EnergyAssault/main/EnergyAssault.lua"))()` },
+
+    // Da Hood & Roleplay
+    { title: "Swagmode V2", game: "Da Hood", scriptCode: `loadstring(game:HttpGet('https://raw.githubusercontent.com/lerkermer/lua-projects/master/SwagModeV002'))()` },
+    { title: "Space Hub", game: "Da Hood", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/Lucasfin000/SpaceHub/main/SpaceHub"))()` },
+    { title: "RayX Hub", game: "Da Hood", scriptCode: `loadstring(game:HttpGet('https://raw.githubusercontent.com/SpaceYes/Lua/Main/DaHood.Lua'))()` },
+    { title: "Ghost Hub RP", game: "Brookhaven 🏡 RP", scriptCode: `loadstring(game:HttpGet('https://raw.githubusercontent.com/GhostPlayer-hub/GhostHub/main/GhostHub.lua'))()` },
+
+    // Minigames (Blade Ball, Fisch)
+    { title: "FFJ Hub Auto Parry", game: "Blade Ball", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/BladeBallV3.lua"))()` },
+    { title: "Serpent Hub", game: "Blade Ball", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/1-upz/SerpentHub/main/BladeBall.lua"))()` },
+    { title: "Speed Hub X", game: "Fisch", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua"))()` },
+
+    // Universal Scripts
+    { title: "Infinite Yield Universal Admin", game: "Universal Script", scriptCode: `loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()` },
+    { title: "Dex Explorer V2", game: "Universal Script", scriptCode: `loadstring(game:HttpGet("https://cdn.wearedevs.net/scripts/Dex%20Explorer.txt"))()` },
+    { title: "Orca Hub Universal", game: "Universal Script", scriptCode: `loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/richie0866/orca/master/public/latest.lua"))()` },
+    { title: "Espy Universal ESP", game: "Universal Script", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/1201for/littlegui/main/Espy"))()` },
+    { title: "Turtle Spy", game: "Universal Script", scriptCode: `loadstring(game:HttpGet("https://raw.githubusercontent.com/turtle-labs/Turtle-Spy/main/turtle_spy.lua"))()` }
+  ].map(h => ({
+    ...h,
+    features: parseDetailedFeatures(h.title, null),
+    source: "GitHub Verified",
+    verified: true,
+    keyless: true,
+  }));
 
   if (!query) return hubs;
-
   const q = query.toLowerCase();
-  return hubs.filter(
-    (h) =>
-      h.game.toLowerCase().includes(q) ||
-      h.title.toLowerCase().includes(q) ||
-      (q.includes("universal") && h.game.toLowerCase().includes("universal"))
-  );
+  return hubs.filter(h => h.game.toLowerCase().includes(q) || h.title.toLowerCase().includes(q) || (q.includes("universal") && h.game.toLowerCase().includes("universal")));
 }
 
 export async function GET(request: Request) {
@@ -197,18 +182,19 @@ export async function GET(request: Request) {
   const page = parseInt(searchParams.get("page") || "1", 10);
 
   try {
-    // Menjalankan fetch paralel ke seluruh sumber eksternal
-    const [sbDataP1, sbDataP2, rawScriptsData] = await Promise.all([
+    // 5 PROSES FETCH BERJALAN BERSAMAAN! 
+    const [sbDataP1, sbDataP2, rawScriptsData, rscriptsNetData] = await Promise.all([
       fetchFromScriptBlox(query || null, page),
       fetchFromScriptBlox(query || null, page + 1),
       fetchFromRawScripts(query || null),
+      fetchFromRScriptsNet(query || null, page)
     ]);
 
-    const gitHubData = getCuratedGitHubHubs(query || null);
+    const gitHubData = getCuratedHubs(query || null);
 
-    const combined = [...gitHubData, ...rawScriptsData, ...sbDataP1, ...sbDataP2];
+    const combined = [...gitHubData, ...rawScriptsData, ...rscriptsNetData, ...sbDataP1, ...sbDataP2];
 
-    // Deduplikasi ketat
+    // Filter Deduplikasi Ketat
     const seen = new Set<string>();
     const unique = combined.filter((item) => {
       const codeKey = item.scriptCode.trim();
