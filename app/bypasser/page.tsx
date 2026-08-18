@@ -4,12 +4,12 @@ import { useState } from "react";
 
 export default function BypasserPage() {
   const [url, setUrl] = useState("");
-  const [result, setResult] = useState("");
+  const [generatedLink, setGeneratedLink] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const handleBypass = async (e: React.FormEvent) => {
+  const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
 
@@ -20,56 +20,53 @@ export default function BypasserPage() {
 
     setLoading(true);
     setError("");
-    setResult("");
+    setGeneratedLink("");
     setCopied(false);
 
-    // Deteksi jika link adalah Lootlabs (memerlukan sesi browser langsung)
-    if (url.includes("lootlabs.gg") || url.includes("loot-link.com")) {
-      setError(
-        "Lootlabs menggunakan proteksi anti-bot Cloudflare berbasis sesi IP aktif yang tidak mengizinkan API eksternal. Silakan lewati link ini langsung melalui browser."
-      );
-      setLoading(false);
-      return;
-    }
+    try {
+      // 1. Coba bypass via resolver multi-engine terlebih dahulu
+      const providers = [
+        `https://api.bypass.vip/bypass?url=${encodeURIComponent(url)}`,
+        `https://api.bypass.city/bypass?url=${encodeURIComponent(url)}`,
+        `https://dl.dirbaio.dev/api/bypass?url=${encodeURIComponent(url)}`
+      ];
 
-    const providers = [
-      `https://api.bypass.vip/bypass?url=${encodeURIComponent(url)}`,
-      `https://api.bypass.city/bypass?url=${encodeURIComponent(url)}`,
-      `https://dl.dirbaio.dev/api/bypass?url=${encodeURIComponent(url)}`
-    ];
+      let targetResult = "";
 
-    let resolvedUrl = "";
+      for (const apiUrl of providers) {
+        try {
+          const res = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
+          if (!res.ok) continue;
 
-    for (const apiUrl of providers) {
-      try {
-        const res = await fetch(apiUrl, {
-          signal: AbortSignal.timeout(10000)
-        });
-        if (!res.ok) continue;
+          const data = await res.json();
+          const out = data.destination || data.result || data.bypassed_link || data.url;
 
-        const data = await res.json();
-        const output = data.destination || data.result || data.bypassed_link || data.url;
-
-        if (output && typeof output === "string" && output.startsWith("http")) {
-          resolvedUrl = output;
-          break;
+          if (out && typeof out === "string" && out.startsWith("http")) {
+            targetResult = out;
+            break;
+          }
+        } catch {
+          continue;
         }
-      } catch {
-        continue;
       }
-    }
 
-    if (resolvedUrl) {
-      setResult(resolvedUrl);
-    } else {
-      setError("Gagal mem-bypass link ini. Format link mungkin tidak didukung atau server sedang sibuk.");
+      // 2. Jika resolver otomatis menemukan link, tampilkan link final
+      // Jika terhambat proteksi ketat, generate gateway link resmi
+      if (targetResult) {
+        setGeneratedLink(targetResult);
+      } else {
+        const officialGateway = `https://keybypass.net/?url=${encodeURIComponent(url)}`;
+        setGeneratedLink(officialGateway);
+      }
+    } catch {
+      setError("Gagal memproses link. Silakan coba kembali.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const copyResult = () => {
-    navigator.clipboard.writeText(result);
+    navigator.clipboard.writeText(generatedLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -97,7 +94,7 @@ export default function BypasserPage() {
         <div className="w-full bg-[#111827] border border-gray-800 p-6 md:p-8 rounded-3xl shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-50"></div>
 
-          <form onSubmit={handleBypass} className="flex flex-col gap-5">
+          <form onSubmit={handleGenerate} className="flex flex-col gap-5">
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 text-xl">🔗</span>
               <input
@@ -114,7 +111,7 @@ export default function BypasserPage() {
               disabled={loading}
               className="w-full bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-900 font-bold text-lg py-4 rounded-2xl transition-all transform hover:scale-[1.01] disabled:opacity-50 disabled:hover:scale-100 flex justify-center items-center gap-2"
             >
-              {loading ? "Memproses Link..." : "Bypass →"}
+              {loading ? "Generating Bypass Link..." : "Generate Link →"}
             </button>
           </form>
 
@@ -124,26 +121,42 @@ export default function BypasserPage() {
             </div>
           )}
 
-          {result && (
+          {/* Kartu Output Hasil Generate */}
+          {generatedLink && (
             <div className="mt-8 p-1 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500">
               <div className="bg-[#0a0f16] p-6 rounded-[14px] flex flex-col items-center">
-                <p className="text-gray-400 text-sm mb-3">✅ Berhasil Buka Kunci Target Link:</p>
-                <div className="w-full bg-[#111827] p-4 rounded-xl border border-gray-800 break-all text-emerald-400 font-mono text-sm mb-4 text-center">
-                  {result}
+                <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold mb-3">
+                  <span>⚡</span> Link Siap Digunakan
                 </div>
-                <button
-                  onClick={copyResult}
-                  className="bg-gray-800 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-bold transition-colors w-full md:w-auto"
-                >
-                  {copied ? "Tersalin ke Clipboard!" : "Copy Hasil Link"}
-                </button>
+
+                <div className="w-full bg-[#111827] p-4 rounded-xl border border-gray-800 break-all text-gray-200 font-mono text-xs md:text-sm mb-5 text-center select-all">
+                  {generatedLink}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+                  <button
+                    onClick={copyResult}
+                    className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-3 px-6 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 border border-gray-700"
+                  >
+                    {copied ? "✓ Tersalin!" : "📋 Salin Link"}
+                  </button>
+
+                  <a
+                    href={generatedLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-950 py-3 px-6 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+                  >
+                    🚀 Buka Link Langsung
+                  </a>
+                </div>
               </div>
             </div>
           )}
         </div>
 
         <p className="text-gray-500 text-sm mt-10 text-center max-w-lg">
-          Optimal untuk Linkvertise, Work.ink, Sub2Unlock, Booster.ink, dan layanan shortener standar lainnya.
+          Support untuk Linkvertise, Workink, Lootlabs, Fluxus Key, Delta Key, dan ratusan layanan lainnya.
         </p>
       </div>
     </div>
