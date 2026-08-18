@@ -90,7 +90,6 @@ export async function GET(request: Request) {
               
               const html = await res.text();
               const results: any[] = [];
-              // Standard MangaStream/Madara Theme Extraction
               const regex = /<div class="bsx">[\s\S]*?<a href="[^"]*\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<div class="tt">\s*([^<]+)\s*<\/div>/gi;
               
               let match;
@@ -157,11 +156,31 @@ export async function GET(request: Request) {
         let chapters = [];
         if (feedRes.status === "fulfilled" && feedRes.value.ok) {
           const feedData = await feedRes.value.json();
-          chapters = feedData.data?.map((ch: any) => ({
-            chapterId: ch.id,
-            title: `Ch. ${ch.attributes.chapter || '?'} ${ch.attributes.title ? `- ${ch.attributes.title}` : ''} [${ch.attributes.translatedLanguage?.toUpperCase()}]`,
-            lang: ch.attributes.translatedLanguage,
-          })) || [];
+          chapters = feedData.data?.map((ch: any) => {
+            const cNum = ch.attributes.chapter;
+            const cTitle = ch.attributes.title;
+            
+            let finalTitle = "";
+            // PERBAIKAN: Format angka Chapter (Handle null / kosong / oneshot)
+            if (cNum !== null && cNum !== undefined && cNum !== "") {
+              finalTitle = `Ch. ${cNum}`;
+            } else {
+              finalTitle = "Oneshot / Extra";
+            }
+            
+            // PERBAIKAN: Format Judul Chapter (Hindari kata null atau 0)
+            if (cTitle && cTitle !== "null" && cTitle.trim() !== "" && cTitle !== "0") {
+              finalTitle += ` - ${cTitle}`;
+            } else if (cNum === "0") {
+              finalTitle += " - Prolog"; // Chapter 0 yg tak berujul kita namai Prolog
+            }
+            
+            return {
+              chapterId: ch.id,
+              title: `${finalTitle} [${(ch.attributes.translatedLanguage || 'ID').toUpperCase()}]`,
+              lang: ch.attributes.translatedLanguage,
+            };
+          }) || [];
         }
         return NextResponse.json({ success: true, title, cover: coverUrl, description, chapters, data: { title, cover: coverUrl, description, chapters } });
       }
@@ -180,8 +199,14 @@ export async function GET(request: Request) {
         const chRegex = /<a href="\/ch\/([^/]+)\/"[^>]*>([\s\S]*?)<\/a>/gi;
         let match;
         while ((match = chRegex.exec(html)) !== null) {
-          const chTitle = match[2].replace(/<\/?[^>]+(>|$)/g, "").trim();
-          if (chTitle.toLowerCase().includes("chapter") || chTitle.toLowerCase().includes("ch.")) {
+          let chTitle = match[2].replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
+          
+          // PERBAIKAN: Jika judul chapter kosong/0, gunakan ID chapter-nya
+          if (!chTitle || chTitle === "0") {
+            chTitle = `Chapter ${match[1].replace(/[^0-9]/g, '') || 'Extra'}`;
+          }
+
+          if (chTitle.toLowerCase().includes("chapter") || chTitle.toLowerCase().includes("ch")) {
             chapters.push({ chapterId: match[1], title: chTitle, lang: "id" });
           }
         }
@@ -209,7 +234,9 @@ export async function GET(request: Request) {
         const chRegex = /<li[^>]*data-num[^>]*>[\s\S]*?<a href="[^"]*\/([^/]+)\/"[^>]*>[\s\S]*?<span class="chapternum">([^<]+)<\/span>/gi;
         let match;
         while ((match = chRegex.exec(html)) !== null) {
-          chapters.push({ chapterId: match[1], title: match[2].trim(), lang: "id" });
+          let chTitle = match[2].trim();
+          if (!chTitle || chTitle === "0") chTitle = `Chapter ${match[1].replace(/[^0-9]/g, '') || 'Extra'}`;
+          chapters.push({ chapterId: match[1], title: chTitle, lang: "id" });
         }
         
         return NextResponse.json({ 
@@ -227,12 +254,11 @@ export async function GET(request: Request) {
     // ---------------------------------------------------------
     if (action === "read" && id && chapterId) {
       
-      // READ: FULLMANHWA (DENGAN GUARD SYSTEM)
+      // READ: FULLMANHWA
       if (id.startsWith("fm:")) {
         if (!FM_READ_ENABLED) {
           return NextResponse.json({ error: "Server FullManhwa sedang tidak stabil (Rawan 500 Cloudflare). Silakan cari & baca judul ini menggunakan sumber MangaDex atau Komiku." }, { status: 403 });
         }
-        // JIKA FM_READ_ENABLED = true, INI MESIN EKSTRAKTORNYA:
         const res = await fetch(`https://fullmanhwa.com/${chapterId}/`, { signal: AbortSignal.timeout(9000) });
         if (!res.ok) throw new Error("Gagal menghubungi server gambar FullManhwa.");
         const html = await res.text();
