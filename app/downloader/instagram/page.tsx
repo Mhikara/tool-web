@@ -25,7 +25,7 @@ export default function InstagramDownloaderPage() {
   const [results, setResults] = useState<MediaItem[]>([]);
   const [history, setHistory] = useState<SavedMedia[]>([]);
 
-  // 1. Ambil riwayat dari Local Storage
+  // 1. Ambil data dari Local Storage
   useEffect(() => {
     try {
       const saved = localStorage.getItem("ig_downloader_history");
@@ -60,33 +60,28 @@ export default function InstagramDownloaderPage() {
     }
   };
 
-  // 3. Tombol Tempel Clipboard Otomatis
+  // 3. Tombol Tempel Clipboard
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
       if (text) setUrl(text.trim());
     } catch {
-      alert("Izin clipboard dibatasi browser. Silakan tekan lama di kolom lalu tempel (paste).");
+      alert("Silakan tekan lama pada kolom input lalu pilih Tempel.");
     }
   };
 
-  // 4. Proses Download Media
+  // 4. Proses Ekstraksi Media
   const handleDownload = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanInput = url.trim();
     if (!cleanInput) return;
-
-    let formattedUrl = cleanInput;
-    if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
-      formattedUrl = "https://" + formattedUrl;
-    }
 
     setLoading(true);
     setError("");
     setResults([]);
 
     try {
-      const res = await fetch(`/api/downloader/instagram?url=${encodeURIComponent(formattedUrl)}`);
+      const res = await fetch(`/api/downloader/instagram?url=${encodeURIComponent(cleanInput)}`);
       const data = await res.json();
 
       if (res.ok && data.success && data.media?.length > 0) {
@@ -95,7 +90,7 @@ export default function InstagramDownloaderPage() {
         setError(data.error || "Gagal mengunduh media. Pastikan video/foto tidak diprivat.");
       }
     } catch {
-      setError("Koneksi jaringan terputus. Silakan coba sesaat lagi.");
+      setError("Terjadi gangguan jaringan ke server. Coba ulangi kembali.");
     } finally {
       setLoading(false);
     }
@@ -108,7 +103,7 @@ export default function InstagramDownloaderPage() {
 
   return (
     <div className="min-h-screen bg-[#fcfcfd] text-gray-800 font-sans flex flex-col">
-      {/* Header dengan Brand Baru: Download Instagram */}
+      {/* Header */}
       <header className="w-full bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-[#ff4a11] flex items-center justify-center text-white font-black text-sm shadow-md shadow-orange-500/20">
@@ -170,7 +165,7 @@ export default function InstagramDownloaderPage() {
               disabled={loading}
               className="w-full bg-[#ff4a11] hover:bg-[#e43f0c] text-white font-bold text-base py-4 rounded-2xl transition-all shadow-lg shadow-orange-500/25 active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {loading ? "Sedang Mengambil Media..." : "Download →"}
+              {loading ? "Sedang Mengambil Media dari Instagram..." : "Download →"}
             </button>
           </form>
 
@@ -187,7 +182,7 @@ export default function InstagramDownloaderPage() {
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">Hasil Siap Unduh:</p>
                 <span className="text-[11px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-md font-semibold">
-                  ✓ Siap Disimpan
+                  ✓ Berhasil Diekstrak
                 </span>
               </div>
 
@@ -218,7 +213,7 @@ export default function InstagramDownloaderPage() {
                         href={item.hdUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        download="instagram_video_hd.mp4"
+                        download="instagram_media_hd.mp4"
                         onClick={() => saveToLocalStorage(item.hdUrl, "HD", item.type, url)}
                         className="w-full bg-gradient-to-r from-[#ff4a11] to-orange-500 hover:from-[#e43f0c] hover:to-orange-600 text-white text-xs font-bold py-3 px-4 rounded-xl text-center shadow-md shadow-orange-500/20 transition-all flex items-center justify-between"
                       >
@@ -234,7 +229,7 @@ export default function InstagramDownloaderPage() {
                         href={item.sdUrl || item.hdUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        download="instagram_video_sd.mp4"
+                        download="instagram_media_sd.mp4"
                         onClick={() => saveToLocalStorage(item.sdUrl || item.hdUrl, "SD", item.type, url)}
                         className="w-full bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 text-xs font-bold py-2.5 px-4 rounded-xl text-center transition-all flex items-center justify-between"
                       >
