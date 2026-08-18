@@ -18,20 +18,13 @@ function parseId(rawId: string) {
   return { prefix: "md", realId: rawId };
 }
 
-// Helper Response dengan CORS & Cache Control Vercel
 function createResponse(data: any, status = 200, isCacheable = false) {
   const headers = new Headers({
     "Access-Control-Allow-Origin": "*",
     "Content-Type": "application/json",
   });
-  
-  if (isCacheable) {
-    // Cache 12 Jam di CDN Vercel (43200 detik)
-    headers.set("Cache-Control", "s-maxage=43200, stale-while-revalidate");
-  } else {
-    headers.set("Cache-Control", "no-store, max-age=0");
-  }
-
+  if (isCacheable) headers.set("Cache-Control", "s-maxage=43200, stale-while-revalidate");
+  else headers.set("Cache-Control", "no-store, max-age=0");
   return NextResponse.json(data, { status, headers });
 }
 
@@ -57,7 +50,7 @@ export async function GET(request: Request) {
       const tasks: Promise<any[]>[] = [];
 
       // 1. ENGINE MANGADEX
-      if (sourceFilter === "semua" || sourceFilter === "mangadex") {
+      if (sourceFilter === "semua" || sourceFilter === "all" || sourceFilter === "mangadex") {
         tasks.push(
           (async () => {
             try {
@@ -77,7 +70,8 @@ export async function GET(request: Request) {
                 return {
                   id: `md:${manga.id}`,
                   title: manga.attributes.title?.en || manga.attributes.title?.id || manga.attributes.title?.["ja-ro"] || "Judul Tidak Diketahui",
-                  cover: coverFile ? `https://uploads.mangadex.org/covers/${manga.id}/${coverFile}.512.jpg` : "",
+                  // PERBAIKAN COVER: Wajib proxy & size 256.jpg untuk performa
+                  cover: coverFile ? `/api/komik/image?url=${encodeURIComponent(`https://uploads.mangadex.org/covers/${manga.id}/${coverFile}.256.jpg`)}` : "",
                   type: manga.attributes.originalLanguage === "ko" ? "Manhwa" : manga.attributes.originalLanguage === "zh" ? "Manhua" : "Manga",
                   source: "MangaDex",
                   latestChapter: lastCh ? `Ch. ${lastCh}` : "Update Baru",
@@ -90,7 +84,7 @@ export async function GET(request: Request) {
       }
 
       // 2. ENGINE KOMIKU
-      if (sourceFilter === "semua" || sourceFilter === "komiku") {
+      if (sourceFilter === "semua" || sourceFilter === "all" || sourceFilter === "komiku") {
         tasks.push(
           (async () => {
             try {
@@ -125,7 +119,7 @@ export async function GET(request: Request) {
       }
 
       // 3. ENGINE FULLMANHWA
-      if (sourceFilter === "semua" || sourceFilter === "fullmanhwa") {
+      if (sourceFilter === "semua" || sourceFilter === "all" || sourceFilter === "fullmanhwa") {
         tasks.push(
           (async () => {
             try {
@@ -165,7 +159,23 @@ export async function GET(request: Request) {
       const combined: any[] = [];
       settled.forEach(res => { if (res.status === "fulfilled" && Array.isArray(res.value)) combined.push(...res.value); });
       
-      return createResponse({ success: true, data: combined }, 200, allowCache);
+      // PERBAIKAN SHAPE JSON: Normalisasi untuk komponen HomeClient lawas
+      const normalized = (combined || []).map((x: any) => ({
+        ...x,
+        typeLabel: x.typeLabel || x.type || x.source,
+        statusLabel: x.statusLabel || x.latestChapter || "",
+        source: String(x.source || "").toLowerCase().replace("mangadex", "mangadex"),
+      }));
+
+      return createResponse({
+        success: true,
+        data: normalized,
+        list: normalized,
+        latest: normalized,
+        popular: normalized,
+        topRated: normalized.slice(0, 12),
+        sources: ["mangadex", "komiku", "fullmanhwa", "omega"],
+      }, 200, allowCache);
     }
 
     // ---------------------------------------------------------
@@ -192,7 +202,9 @@ export async function GET(request: Request) {
              title = m.attributes?.title?.en || m.attributes?.title?.id || m.attributes?.title?.["ja-ro"] || "Judul Tidak Diketahui";
              description = m.attributes?.description?.id || m.attributes?.description?.en || "Tidak ada sinopsis tersedia.";
              const coverRel = m.relationships?.find((r: any) => r.type === "cover_art");
-             if (coverRel?.attributes?.fileName) coverUrl = `https://uploads.mangadex.org/covers/${realId}/${coverRel.attributes.fileName}.512.jpg`;
+             if (coverRel?.attributes?.fileName) {
+               coverUrl = `/api/komik/image?url=${encodeURIComponent(`https://uploads.mangadex.org/covers/${realId}/${coverRel.attributes.fileName}.512.jpg`)}`;
+             }
           }
         }
 
@@ -309,7 +321,7 @@ export async function GET(request: Request) {
         if (chapterImages.length === 0) return createResponse({ error: "Halaman kosong." }, 404);
 
         const images = chapterImages.map((file: string) => `${baseUrl}/data/${hash}/${file}`);
-        return createResponse({ success: true, images }, 200, true); // Cache gambar MD yang aman
+        return createResponse({ success: true, images }, 200, true);
       }
 
       if (prefix === "komiku") {
@@ -329,7 +341,7 @@ export async function GET(request: Request) {
             }
          }
          if (images.length === 0) return createResponse({ error: "Gambar tidak ditemukan." }, 404);
-         return createResponse({ success: true, images }, 200, true); // Cache halaman bacaan
+         return createResponse({ success: true, images }, 200, true);
       }
       
       return createResponse({ error: "Aksi baca tidak dikenali." }, 400);

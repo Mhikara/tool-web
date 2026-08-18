@@ -84,10 +84,10 @@ export default function HomeClient() {
           fetch("/api/komik?action=home&source=omega").then((r) => r.json()),
         ]);
 
-        const kmL = mapList(km.latest || km.list || []);
-        const fmL = mapList(fm.latest || fm.list || []);
-        const mdL = mapList(md.latest || md.list || []);
-        const omL = mapList(om.latest || om.list || []);
+        const kmL = mapList(km.latest || km.list || km.data || []);
+        const fmL = mapList(fm.latest || fm.list || fm.data || []);
+        const mdL = mapList(md.latest || md.list || md.data || []);
+        const omL = mapList(om.latest || om.list || om.data || []);
         const mdP = mapList(md.popular || md.topRated || []);
 
         setCounts({
@@ -126,8 +126,8 @@ export default function HomeClient() {
         const data = await fetch(
           "/api/komik?action=home&source=" + encodeURIComponent(source)
         ).then((r) => r.json());
-        const list = mapList(data.latest || data.list || []);
-        const pop = mapList(data.popular || data.topRated || list);
+        const list = mapList(data.latest || data.list || data.data || []);
+        const pop = mapList(data.popular || data.topRated || data.data || list);
         setCounts({ [source]: list.length });
         setLatest(list);
         setPopular(pop.slice(0, 16));
