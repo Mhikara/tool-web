@@ -25,7 +25,7 @@ export default function InstagramDownloaderPage() {
   const [results, setResults] = useState<MediaItem[]>([]);
   const [history, setHistory] = useState<SavedMedia[]>([]);
 
-  // 1. Ambil data dari Local Storage
+  // 1. Ambil riwayat dari Local Storage
   useEffect(() => {
     try {
       const saved = localStorage.getItem("ig_downloader_history");
@@ -60,24 +60,25 @@ export default function InstagramDownloaderPage() {
     }
   };
 
-  // 3. Tombol Tempel Clipboard
+  // 3. Tombol Tempel Clipboard Otomatis
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      if (text) setUrl(text);
+      if (text) setUrl(text.trim());
     } catch {
-      alert("Izin clipboard ditolak. Tempel link secara manual.");
+      alert("Izin clipboard dibatasi browser. Silakan tekan lama di kolom lalu tempel (paste).");
     }
   };
 
-  // 4. Proses Ambil Data Instagram
+  // 4. Proses Download Media
   const handleDownload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url.trim()) return;
+    const cleanInput = url.trim();
+    if (!cleanInput) return;
 
-    if (!url.includes("instagram.com/")) {
-      setError("Masukkan link Instagram yang valid (Reels, Post, atau Video).");
-      return;
+    let formattedUrl = cleanInput;
+    if (!formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
+      formattedUrl = "https://" + formattedUrl;
     }
 
     setLoading(true);
@@ -85,16 +86,16 @@ export default function InstagramDownloaderPage() {
     setResults([]);
 
     try {
-      const res = await fetch(`/api/downloader/instagram?url=${encodeURIComponent(url.trim())}`);
+      const res = await fetch(`/api/downloader/instagram?url=${encodeURIComponent(formattedUrl)}`);
       const data = await res.json();
 
       if (res.ok && data.success && data.media?.length > 0) {
         setResults(data.media);
       } else {
-        setError(data.error || "Gagal mengunduh media. Silakan coba link lain.");
+        setError(data.error || "Gagal mengunduh media. Pastikan video/foto tidak diprivat.");
       }
     } catch {
-      setError("Terjadi kesalahan jaringan. Periksa koneksi internet Anda.");
+      setError("Koneksi jaringan terputus. Silakan coba sesaat lagi.");
     } finally {
       setLoading(false);
     }
@@ -107,14 +108,14 @@ export default function InstagramDownloaderPage() {
 
   return (
     <div className="min-h-screen bg-[#fcfcfd] text-gray-800 font-sans flex flex-col">
-      {/* Header Ala RedVid.io */}
-      <header className="w-full bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-30">
+      {/* Header dengan Brand Baru: Download Instagram */}
+      <header className="w-full bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between sticky top-0 z-30 shadow-sm">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-[#ff4a11] flex items-center justify-center text-white font-black text-sm shadow-md shadow-orange-500/20">
             🔻
           </div>
           <span className="font-extrabold text-xl text-gray-900 tracking-tight">
-            RedVid<span className="text-[#ff4a11]">.io</span>
+            Download <span className="text-[#ff4a11]">Instagram</span>
           </span>
         </div>
         <div className="flex items-center gap-4 text-gray-600 text-sm font-medium">
@@ -149,7 +150,7 @@ export default function InstagramDownloaderPage() {
               <span className="pl-3 text-gray-400 text-lg">🔗</span>
               <input
                 type="text"
-                placeholder="Tempel di sini"
+                placeholder="Tempel link Instagram di sini..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 className="w-full bg-transparent px-3 py-3 text-gray-800 text-sm placeholder-gray-400 focus:outline-none"
@@ -169,7 +170,7 @@ export default function InstagramDownloaderPage() {
               disabled={loading}
               className="w-full bg-[#ff4a11] hover:bg-[#e43f0c] text-white font-bold text-base py-4 rounded-2xl transition-all shadow-lg shadow-orange-500/25 active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {loading ? "Sedang Memproses Resolusi..." : "Download →"}
+              {loading ? "Sedang Mengambil Media..." : "Download →"}
             </button>
           </form>
 
@@ -180,13 +181,13 @@ export default function InstagramDownloaderPage() {
             </div>
           )}
 
-          {/* HASIL DOWNLOAD DENGAN OPSI RESOLUSI HD & BIASA */}
+          {/* Hasil Download Langsung */}
           {results.length > 0 && (
             <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col gap-5">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">Pilih Kualitas Unduhan:</p>
+                <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">Hasil Siap Unduh:</p>
                 <span className="text-[11px] bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-md font-semibold">
-                  ✓ Siap Unduh
+                  ✓ Siap Disimpan
                 </span>
               </div>
 
@@ -194,30 +195,30 @@ export default function InstagramDownloaderPage() {
                 {results.map((item, idx) => (
                   <div key={idx} className="bg-gray-50/80 border border-gray-200 rounded-2xl p-4 flex flex-col md:flex-row gap-4 items-center">
                     
-                    {/* Media Preview */}
+                    {/* Media Preview Player */}
                     <div className="w-full md:w-44 h-48 md:h-36 shrink-0 bg-black rounded-xl overflow-hidden shadow-inner flex items-center justify-center">
                       {item.type === "video" ? (
-                        <video src={item.hdUrl} controls className="w-full h-full object-cover" />
+                        <video src={item.hdUrl} controls playsInline className="w-full h-full object-cover" />
                       ) : (
                         <img src={item.hdUrl} alt="Preview" className="w-full h-full object-cover" />
                       )}
                     </div>
 
-                    {/* Download Action Buttons (HD vs SD) */}
+                    {/* Tombol Pilihan Unduhan (HD vs SD) */}
                     <div className="flex-1 w-full flex flex-col justify-center gap-2.5">
                       <div className="text-left mb-1">
                         <span className="text-[11px] font-bold uppercase text-[#ff4a11]">
                           Format: {item.type === "video" ? "MP4 Video" : "JPG Image"}
                         </span>
-                        <h4 className="text-sm font-bold text-gray-800">Pilih Resolusi Video/Foto:</h4>
+                        <h4 className="text-sm font-bold text-gray-800">Pilih Kualitas Resolusi:</h4>
                       </div>
 
-                      {/* Tombol Resolusi HD */}
+                      {/* Resolusi HD */}
                       <a
                         href={item.hdUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        download
+                        download="instagram_video_hd.mp4"
                         onClick={() => saveToLocalStorage(item.hdUrl, "HD", item.type, url)}
                         className="w-full bg-gradient-to-r from-[#ff4a11] to-orange-500 hover:from-[#e43f0c] hover:to-orange-600 text-white text-xs font-bold py-3 px-4 rounded-xl text-center shadow-md shadow-orange-500/20 transition-all flex items-center justify-between"
                       >
@@ -228,18 +229,18 @@ export default function InstagramDownloaderPage() {
                         <span>📥</span>
                       </a>
 
-                      {/* Tombol Resolusi Biasa (SD / Hemat Kuota) */}
+                      {/* Resolusi Biasa */}
                       <a
                         href={item.sdUrl || item.hdUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        download
+                        download="instagram_video_sd.mp4"
                         onClick={() => saveToLocalStorage(item.sdUrl || item.hdUrl, "SD", item.type, url)}
                         className="w-full bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 text-xs font-bold py-2.5 px-4 rounded-xl text-center transition-all flex items-center justify-between"
                       >
                         <span className="flex items-center gap-2">
                           <span className="bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded text-[10px] font-extrabold">SD</span>
-                          <span>Download Resolusi Biasa (Hemat Kuota)</span>
+                          <span>Download Resolusi Standar</span>
                         </span>
                         <span>⚡</span>
                       </a>
@@ -298,25 +299,24 @@ export default function InstagramDownloaderPage() {
             Mengapa menggunakan <span className="text-[#ff4a11]">pengunduh Instagram</span> kami?
           </h2>
           <p className="text-gray-600 text-sm md:text-base leading-relaxed mb-8">
-            Pengunduh Instagram gratis kami memungkinkan Anda menyimpan Reels, video, dan foto dari Instagram secara instan. Unduh konten Instagram dalam kualitas HD atau resolusi biasa hemat data hanya dengan satu klik.
+            Pengunduh Instagram gratis kami memungkinkan Anda menyimpan Reels, video, dan foto dari Instagram secara instan. Unduh konten Instagram dalam kualitas HD atau resolusi standar hemat kuota hanya dengan satu klik.
           </p>
 
-          {/* 3 Keunggulan Fitur */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
             <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
               <span className="text-2xl block mb-2">💎</span>
-              <h4 className="font-bold text-gray-900 text-sm mb-1">Pilihan Resolusi HD/SD</h4>
-              <p className="text-gray-500 text-xs">Pilih kualitas 1080p jernih atau mode hemat kuota untuk unduhan cepat.</p>
+              <h4 className="font-bold text-gray-900 text-sm mb-1">Resolusi HD & SD</h4>
+              <p className="text-gray-500 text-xs">Pilihan unduh 1080p jernih atau resolusi standar hemat data.</p>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
               <span className="text-2xl block mb-2">⚡</span>
-              <h4 className="font-bold text-gray-900 text-sm mb-1">Cepat & Otomatis</h4>
-              <p className="text-gray-500 text-xs">Tinggal tempel link dan media langsung siap diunduh dalam hitungan detik.</p>
+              <h4 className="font-bold text-gray-900 text-sm mb-1">Cepat & Instan</h4>
+              <p className="text-gray-500 text-xs">Cukup tempel link dan media langsung siap diputar atau diunduh.</p>
             </div>
             <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
               <span className="text-2xl block mb-2">🔒</span>
-              <h4 className="font-bold text-gray-900 text-sm mb-1">Local Storage Aman</h4>
-              <p className="text-gray-500 text-xs">Riwayat tersimpan di memori browser HP Anda tanpa dikirim ke server lain.</p>
+              <h4 className="font-bold text-gray-900 text-sm mb-1">Local Storage</h4>
+              <p className="text-gray-500 text-xs">Riwayat tersimpan aman di browser perangkat Anda sendiri.</p>
             </div>
           </div>
         </section>
