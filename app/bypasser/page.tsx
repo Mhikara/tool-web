@@ -23,17 +23,57 @@ export default function BypasserPage() {
     setCopied(false);
 
     try {
-      // Mengirim link ke Backend Vercel kita sendiri untuk menghindari blokir CORS
-      const res = await fetch(`/api/bypass?url=${encodeURIComponent(url)}`);
-      const json = await res.json();
+      // Kita gunakan kombinasi API andalan dan beberapa layanan CORS Proxy Publik
+      const targetApiUrl = `https://api.keybypass.net/bypass?url=${encodeURIComponent(url)}&hwid=`;
       
-      if (res.ok && json.success) {
-        setResult(json.result);
-      } else {
-        setError(json.error || "Gagal mem-bypass link. Pastikan link masih aktif.");
+      // CORS Proxies
+      const proxies = [
+        `https://corsproxy.io/?url=${encodeURIComponent(targetApiUrl)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetApiUrl)}`,
+        `https://cors-anywhere.herokuapp.com/${targetApiUrl}` // Biasanya butuh akses manual, taruh di akhir
+      ];
+
+      let isSuccess = false;
+
+      for (const proxyUrl of proxies) {
+        try {
+          const res = await fetch(proxyUrl, {
+            // Karena ini dari client side, timeout tidak menggunakan AbortSignal (kadang gak didukung semua browser)
+          });
+
+          if (!res.ok) continue;
+
+          const json = await res.json();
+
+          if (json.status === "success" || json.destination || json.result) {
+            setResult(json.destination || json.result || json.bypassed_link);
+            isSuccess = true;
+            break; // Jika sukses, keluar dari loop
+          }
+        } catch (innerErr) {
+          console.warn("Proxy gagal, mencoba proxy selanjutnya...", proxyUrl);
+          continue;
+        }
       }
+
+      if (!isSuccess) {
+         // Coba Fallback tanpa CORS Proxy, barangkali API-nya sedang longgar
+         const directRes = await fetch(`https://api.bypass.city/bypass?url=${encodeURIComponent(url)}`).catch(()=>null);
+         if(directRes && directRes.ok){
+            const directJson = await directRes.json();
+            if(directJson.result || directJson.destination){
+                setResult(directJson.result || directJson.destination);
+                isSuccess = true;
+            }
+         }
+      }
+
+      if (!isSuccess) {
+        setError("Lootlabs sedang sangat tangguh atau link sudah kedaluwarsa. Sistem proxy gagal menembus keamanan mereka saat ini.");
+      }
+
     } catch (err) {
-      setError("Server internal error / timeout. Coba muat ulang halaman.");
+      setError("Terjadi kesalahan sistem di browser Anda. Coba lagi.");
     } finally {
       setLoading(false);
     }
@@ -84,7 +124,7 @@ export default function BypasserPage() {
               disabled={loading}
               className="w-full bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-900 font-bold text-lg py-4 rounded-2xl transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 flex justify-center items-center gap-2"
             >
-              {loading ? "Menerobos Keamanan... (Tunggu sebentar)" : "Bypass →"}
+              {loading ? "Menembus Keamanan via Client Proxy..." : "Bypass →"}
             </button>
           </form>
 
