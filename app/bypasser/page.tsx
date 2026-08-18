@@ -1,6 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+
+declare global {
+  interface Window {
+    hcaptcha?: any;
+    onHCaptchaVerify?: (token: string) => void;
+    onHCaptchaExpire?: () => void;
+  }
+}
 
 export default function BypasserPage() {
   const [url, setUrl] = useState("");
@@ -8,12 +16,65 @@ export default function BypasserPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const widgetIdRef = useRef<string | null>(null);
+
+  // Load script hCaptcha secara dinamis
+  useEffect(() => {
+    window.onHCaptchaVerify = (token: string) => {
+      setCaptchaToken(token);
+      setError("");
+    };
+
+    window.onHCaptchaExpire = () => {
+      setCaptchaToken(null);
+    };
+
+    const scriptId = "hcaptcha-script";
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement("script");
+      script.id = scriptId;
+      script.src = "https://js.hcaptcha.com/1/api.js?render=explicit";
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        if (window.hcaptcha) {
+          try {
+            widgetIdRef.current = window.hcaptcha.render("hcaptcha-container", {
+              sitekey: "a5628859-9943-41ea-9c02-e25f69f21469",
+              theme: "dark",
+              callback: "onHCaptchaVerify",
+              "expired-callback": "onHCaptchaExpire",
+            });
+          } catch (e) {
+            console.error("Gagal inisialisasi hCaptcha:", e);
+          }
+        }
+      };
+      document.body.appendChild(script);
+    } else if (window.hcaptcha && !widgetIdRef.current) {
+      try {
+        widgetIdRef.current = window.hcaptcha.render("hcaptcha-container", {
+          sitekey: "a5628859-9943-41ea-9c02-e25f69f21469",
+          theme: "dark",
+          callback: "onHCaptchaVerify",
+          "expired-callback": "onHCaptchaExpire",
+        });
+      } catch (e) {}
+    }
+  }, []);
 
   const handleBypass = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
+
     if (!url.startsWith("http")) {
       setError("Link harus diawali dengan http:// atau https://");
+      return;
+    }
+
+    if (!captchaToken) {
+      setError("Silakan centang verifikasi 'Aku manusia' terlebih dahulu.");
       return;
     }
 
@@ -23,50 +84,27 @@ export default function BypasserPage() {
     setCopied(false);
 
     try {
-      // DAFTAR API DEWA: Mensupport CORS bawaan (Bisa ditembak langsung dari HP pengguna tanpa diblokir)
-      // Dirbaio saat ini adalah yang TERKUAT untuk memecahkan Lootlabs
-      const providers = [
-        `https://dl.dirbaio.dev/api/bypass?url=${encodeURIComponent(url)}`,
-        `https://api.bypass.vip/bypass?url=${encodeURIComponent(url)}`,
-        `https://api.bypass.city/bypass?url=${encodeURIComponent(url)}`,
-        `https://api.ethosservices.xyz/bypass?url=${encodeURIComponent(url)}`
-      ];
+      // Mengirim request bypass bersama token captcha yang valid
+      const targetApi = `https://api.keybypass.net/bypass?url=${encodeURIComponent(url)}&token=${encodeURIComponent(captchaToken)}&hwid=`;
+      
+      const res = await fetch(`https://corsproxy.io/?url=${encodeURIComponent(targetApi)}`);
+      const json = await res.json();
 
-      let isSuccess = false;
+      const finalUrl = json.destination || json.result || json.bypassed_link || json.url;
 
-      // Mesin ini akan mencoba API satu per satu secara kilat
-      for (const apiUrl of providers) {
-        try {
-          // Tembak langsung (Native Fetch) tanpa perantara server/proxy!
-          const res = await fetch(apiUrl);
-          
-          if (!res.ok) continue;
-
-          const json = await res.json();
-
-          // Menangkap hasil dari berbagai macam format API
-          const finalUrl = json.destination || json.result || json.bypassed_link || json.url;
-
-          // Jika hasilnya benar-benar link yang valid
-          if (finalUrl && finalUrl.startsWith("http")) {
-            setResult(finalUrl);
-            isSuccess = true;
-            break; // Hentikan pencarian, kita sudah dapat hasilnya!
-          }
-        } catch (innerErr) {
-          // Jika API ini down/error, jangan panik, biarkan loop lanjut ke API berikutnya
-          console.warn("API Gagal, beralih ke server cadangan...");
-          continue; 
-        }
+      if (json.status === "success" || (finalUrl && finalUrl.startsWith("http"))) {
+        setResult(finalUrl);
+      } else {
+        setError(json.message || "Gagal mem-bypass link. Pastikan link masih aktif.");
       }
-
-      if (!isSuccess) {
-        setError("Lootlabs sedang sangat tangguh atau link yang kamu masukkan salah/kedaluwarsa. 4 Server Bypasser Utama gagal menembusnya hari ini.");
-      }
-
     } catch (err) {
-      setError("Terjadi kesalahan sistem di perangkat Anda. Coba lagi.");
+      setError("Gagal terhubung ke server verifikasi. Coba ulangi kembali.");
     } finally {
+      // Reset captcha setelah submit
+      if (window.hcaptcha && widgetIdRef.current) {
+        window.hcaptcha.reset(widgetIdRef.current);
+      }
+      setCaptchaToken(null);
       setLoading(false);
     }
   };
@@ -79,7 +117,7 @@ export default function BypasserPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0f16] text-white flex flex-col items-center p-6 font-sans">
-      <div className="w-full max-w-3xl flex justify-between items-center mb-16 pt-4">
+      <div className="w-full max-w-3xl flex justify-between items-center mb-12 pt-4">
         <div className="flex items-center gap-2">
           <span className="text-emerald-400 text-2xl">📚</span>
           <h1 className="text-xl font-bold tracking-wide">
@@ -89,7 +127,7 @@ export default function BypasserPage() {
       </div>
 
       <div className="w-full max-w-3xl flex flex-col items-center">
-        <h2 className="text-4xl md:text-6xl font-extrabold text-center mb-12 leading-tight">
+        <h2 className="text-4xl md:text-6xl font-extrabold text-center mb-10 leading-tight">
           Unlock Any <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
             Linkvertise
@@ -111,13 +149,19 @@ export default function BypasserPage() {
                 className="w-full bg-[#0a0f16] border border-gray-700 text-gray-200 placeholder-gray-500 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500 transition-colors"
               />
             </div>
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-900 font-bold text-lg py-4 rounded-2xl transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 flex justify-center items-center gap-2"
+              className="w-full bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-900 font-bold text-lg py-4 rounded-2xl transition-all transform hover:scale-[1.01] disabled:opacity-50 disabled:hover:scale-100 flex justify-center items-center gap-2"
             >
-              {loading ? "Multi-Engine Bypassing..." : "Bypass →"}
+              {loading ? "Memverifikasi & Bypassing..." : "Bypass →"}
             </button>
+
+            {/* Kotak Widget hCaptcha */}
+            <div className="flex justify-center my-2">
+              <div id="hcaptcha-container"></div>
+            </div>
           </form>
 
           {error && (
@@ -143,8 +187,8 @@ export default function BypasserPage() {
             </div>
           )}
         </div>
-        <p className="text-gray-500 text-sm mt-12 text-center max-w-lg">
-          Support untuk Linkvertise, Workink, Lootlabs, Fluxus Key, Delta Key, dll. 100% otomatis tanpa verifikasi manusia.
+        <p className="text-gray-500 text-sm mt-10 text-center max-w-lg">
+          Support untuk Linkvertise, Workink, Lootlabs, Fluxus Key, Delta Key, dan shortener lainnya.
         </p>
       </div>
     </div>
