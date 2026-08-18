@@ -23,57 +23,49 @@ export default function BypasserPage() {
     setCopied(false);
 
     try {
-      // Kita gunakan kombinasi API andalan dan beberapa layanan CORS Proxy Publik
-      const targetApiUrl = `https://api.keybypass.net/bypass?url=${encodeURIComponent(url)}&hwid=`;
-      
-      // CORS Proxies
-      const proxies = [
-        `https://corsproxy.io/?url=${encodeURIComponent(targetApiUrl)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(targetApiUrl)}`,
-        `https://cors-anywhere.herokuapp.com/${targetApiUrl}` // Biasanya butuh akses manual, taruh di akhir
+      // DAFTAR API DEWA: Mensupport CORS bawaan (Bisa ditembak langsung dari HP pengguna tanpa diblokir)
+      // Dirbaio saat ini adalah yang TERKUAT untuk memecahkan Lootlabs
+      const providers = [
+        `https://dl.dirbaio.dev/api/bypass?url=${encodeURIComponent(url)}`,
+        `https://api.bypass.vip/bypass?url=${encodeURIComponent(url)}`,
+        `https://api.bypass.city/bypass?url=${encodeURIComponent(url)}`,
+        `https://api.ethosservices.xyz/bypass?url=${encodeURIComponent(url)}`
       ];
 
       let isSuccess = false;
 
-      for (const proxyUrl of proxies) {
+      // Mesin ini akan mencoba API satu per satu secara kilat
+      for (const apiUrl of providers) {
         try {
-          const res = await fetch(proxyUrl, {
-            // Karena ini dari client side, timeout tidak menggunakan AbortSignal (kadang gak didukung semua browser)
-          });
-
+          // Tembak langsung (Native Fetch) tanpa perantara server/proxy!
+          const res = await fetch(apiUrl);
+          
           if (!res.ok) continue;
 
           const json = await res.json();
 
-          if (json.status === "success" || json.destination || json.result) {
-            setResult(json.destination || json.result || json.bypassed_link);
+          // Menangkap hasil dari berbagai macam format API
+          const finalUrl = json.destination || json.result || json.bypassed_link || json.url;
+
+          // Jika hasilnya benar-benar link yang valid
+          if (finalUrl && finalUrl.startsWith("http")) {
+            setResult(finalUrl);
             isSuccess = true;
-            break; // Jika sukses, keluar dari loop
+            break; // Hentikan pencarian, kita sudah dapat hasilnya!
           }
         } catch (innerErr) {
-          console.warn("Proxy gagal, mencoba proxy selanjutnya...", proxyUrl);
-          continue;
+          // Jika API ini down/error, jangan panik, biarkan loop lanjut ke API berikutnya
+          console.warn("API Gagal, beralih ke server cadangan...");
+          continue; 
         }
       }
 
       if (!isSuccess) {
-         // Coba Fallback tanpa CORS Proxy, barangkali API-nya sedang longgar
-         const directRes = await fetch(`https://api.bypass.city/bypass?url=${encodeURIComponent(url)}`).catch(()=>null);
-         if(directRes && directRes.ok){
-            const directJson = await directRes.json();
-            if(directJson.result || directJson.destination){
-                setResult(directJson.result || directJson.destination);
-                isSuccess = true;
-            }
-         }
-      }
-
-      if (!isSuccess) {
-        setError("Lootlabs sedang sangat tangguh atau link sudah kedaluwarsa. Sistem proxy gagal menembus keamanan mereka saat ini.");
+        setError("Lootlabs sedang sangat tangguh atau link yang kamu masukkan salah/kedaluwarsa. 4 Server Bypasser Utama gagal menembusnya hari ini.");
       }
 
     } catch (err) {
-      setError("Terjadi kesalahan sistem di browser Anda. Coba lagi.");
+      setError("Terjadi kesalahan sistem di perangkat Anda. Coba lagi.");
     } finally {
       setLoading(false);
     }
@@ -124,7 +116,7 @@ export default function BypasserPage() {
               disabled={loading}
               className="w-full bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-900 font-bold text-lg py-4 rounded-2xl transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 flex justify-center items-center gap-2"
             >
-              {loading ? "Menembus Keamanan via Client Proxy..." : "Bypass →"}
+              {loading ? "Multi-Engine Bypassing..." : "Bypass →"}
             </button>
           </form>
 
