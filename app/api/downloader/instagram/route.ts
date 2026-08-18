@@ -18,91 +18,102 @@ export async function GET(request: Request) {
 
   const cleanUrl = cleanInstagramUrl(rawUrl);
 
-  // Mengambil API Key dari Environment Variable (jika ada) atau gunakan Official Gateway
-  const RAPIDAPI_KEY = process.env.RAPIDAPI_KEY || "e20b33b708msh9446ebdf4b5b75fp185794jsn1bb4c00eecff";
-
-  // DAFTAR OFFICIAL API KEY GATEWAYS
+  // DAFTAR 5 API AGGREGATOR PALING STABIL (No Limit & Free)
   const apiEngines = [
-    // 1. Official RapidAPI Instagram Media Downloader
+    // Engine 1: Nstar Instagram Downloader API
     async () => {
-      const res = await fetch(`https://instagram-downloader-download-instagram-videos-stories.p.rapidapi.com/index?url=${encodeURIComponent(cleanUrl)}`, {
-        method: "GET",
-        headers: {
-          "x-rapidapi-key": RAPIDAPI_KEY,
-          "x-rapidapi-host": "instagram-downloader-download-instagram-videos-stories.p.rapidapi.com"
-        },
+      const res = await fetch(`https://api.nstar.yuhu.biz.id/api/downloader/igdl?url=${encodeURIComponent(cleanUrl)}`, {
+        headers: { "User-Agent": "Mozilla/5.0" },
         signal: AbortSignal.timeout(9000),
       });
-
       if (!res.ok) return null;
       const data = await res.json();
-
-      const mediaUrl = data.media || data.download_url || data.url || data.video_url || data.result?.url;
-      if (mediaUrl) {
-        return [{
-          type: (data.type === "image" || mediaUrl.includes(".jpg") || mediaUrl.includes(".png")) ? ("image" as const) : ("video" as const),
-          hdUrl: mediaUrl,
-          sdUrl: data.sd_url || mediaUrl,
-          thumbnail: data.thumbnail || data.picture_url || undefined,
-        }];
+      if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+        return data.data.map((item: any) => ({
+          type: item.url.includes(".mp4") ? "video" as const : "image" as const,
+          hdUrl: item.url,
+          sdUrl: item.url,
+          thumbnail: item.thumbnail
+        }));
       }
       return null;
     },
 
-    // 2. Official RapidAPI Video Extractor v2
+    // Engine 2: Alya API (FastDL Backend)
     async () => {
-      const res = await fetch(`https://instagram-reels-downloader2.p.rapidapi.com/.netlify/functions/api/getLink?url=${encodeURIComponent(cleanUrl)}`, {
-        method: "GET",
-        headers: {
-          "x-rapidapi-key": RAPIDAPI_KEY,
-          "x-rapidapi-host": "instagram-reels-downloader2.p.rapidapi.com",
-          "Content-Type": "application/json"
-        },
+      const res = await fetch(`https://api.alyachan.dev/api/ig?url=${encodeURIComponent(cleanUrl)}`, {
+        headers: { "User-Agent": "Mozilla/5.0" },
         signal: AbortSignal.timeout(9000),
       });
-
       if (!res.ok) return null;
       const data = await res.json();
-      const direct = data.download_url || data.url || data.link;
-
-      if (direct) {
-        return [{
-          type: "video" as const,
-          hdUrl: direct,
-          sdUrl: direct,
-          thumbnail: data.thumbnail || undefined,
-        }];
+      if (data.status && data.data && Array.isArray(data.data)) {
+        return data.data.map((item: any) => ({
+          type: item.url.includes(".mp4") ? "video" as const : "image" as const,
+          hdUrl: item.url,
+          sdUrl: item.url,
+        }));
       }
       return null;
     },
 
-    // 3. FastSaver Official API Hub
+    // Engine 3: Ryzendesu Instagram Scraper
     async () => {
-      const res = await fetch(`https://auto-download-all-in-one.p.rapidapi.com/fetch?url=${encodeURIComponent(cleanUrl)}`, {
-        method: "GET",
-        headers: {
-          "x-rapidapi-key": RAPIDAPI_KEY,
-          "x-rapidapi-host": "auto-download-all-in-one.p.rapidapi.com"
-        },
+      const res = await fetch(`https://api.ryzendesu.vip/api/downloader/ig?url=${encodeURIComponent(cleanUrl)}`, {
+        headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
         signal: AbortSignal.timeout(9000),
       });
-
       if (!res.ok) return null;
       const data = await res.json();
+      if (data.url && Array.isArray(data.url)) {
+        return data.url.map((url: string) => ({
+          type: url.includes(".mp4") ? "video" as const : "image" as const,
+          hdUrl: url,
+          sdUrl: url,
+        }));
+      }
+      return null;
+    },
 
-      if (data.ok && data.download_url) {
-        return [{
-          type: data.type === "image" ? ("image" as const) : ("video" as const),
-          hdUrl: data.download_url,
-          sdUrl: data.download_url,
-          thumbnail: data.thumbnail_url || undefined,
-        }];
+    // Engine 4: Siputzx API Server
+    async () => {
+      const res = await fetch(`https://api.siputzx.my.id/api/d/ig?url=${encodeURIComponent(cleanUrl)}`, {
+        headers: { "User-Agent": "Mozilla/5.0" },
+        signal: AbortSignal.timeout(9000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.data && Array.isArray(data.data) && data.data.length > 0) {
+        return data.data.map((item: any) => ({
+          type: item.url.includes(".mp4") ? "video" as const : "image" as const,
+          hdUrl: item.url,
+          sdUrl: item.url,
+        }));
+      }
+      return null;
+    },
+
+    // Engine 5: Vreden Web API
+    async () => {
+      const res = await fetch(`https://api.vreden.web.id/api/igdownload?url=${encodeURIComponent(cleanUrl)}`, {
+        headers: { "User-Agent": "Mozilla/5.0" },
+        signal: AbortSignal.timeout(9000),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.result && Array.isArray(data.result) && data.result.length > 0) {
+        return data.result.map((item: any) => ({
+          type: item.url.includes(".mp4") ? "video" as const : "image" as const,
+          hdUrl: item.url,
+          sdUrl: item.sd || item.url,
+          thumbnail: item.thumbnail
+        }));
       }
       return null;
     }
   ];
 
-  // Eksekusi API secara berurutan
+  // Eksekusi API secara berurutan, jika gagal coba yang lain
   for (const runEngine of apiEngines) {
     try {
       const result = await runEngine();
@@ -119,6 +130,6 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    error: "Gagal mengambil video. Pastikan akun Instagram publik dan link valid.",
+    error: "Gagal memproses media. Server pusat sedang sibuk atau postingan bersifat Private.",
   }, { status: 502 });
 }
