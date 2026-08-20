@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-const FM_READ_ENABLED = true; // Diaktifkan dengan timeout aman & fallback
+// FULLMANHWA READ ENABLED AKTIF PENUH
+const FM_READ_ENABLED = true;
 
 function formatWaktu(dateString: string) {
   if (!dateString) return "Baru Saja";
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
 
   try {
     // ---------------------------------------------------------
-    // 1. ACTION: HOME / SEARCH / KATALOG 
+    // 1. ACTION: HOME / SEARCH / KATALOG (MANGADEX, KOMIKU, FULLMANHWA)
     // ---------------------------------------------------------
     if (action === "home" || action === "search" || action === "katalog") {
       const query = searchParams.get("q") || "";
@@ -166,7 +167,13 @@ export async function GET(request: Request) {
               if (query) url = `https://fullmanhwa.com/?s=${encodeURIComponent(query)}`;
               else if (sort === "populer") url = `https://fullmanhwa.com/manga/?order=popular`;
 
-              const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+              const res = await fetch(url, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                  "Referer": "https://fullmanhwa.com/"
+                },
+                signal: AbortSignal.timeout(7000)
+              });
               if (!res.ok) return [];
               
               const html = await res.text();
@@ -194,8 +201,8 @@ export async function GET(request: Request) {
                   latestChapter: chLabel,
                   latest_chapter: chLabel,
                   statusLabel: chLabel,
-                  rating: "8.6",
-                  score: 8.6,
+                  rating: "8.8",
+                  score: 8.8,
                   updateOn: formatWaktu(new Date().toISOString())
                 });
               }
@@ -232,7 +239,7 @@ export async function GET(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // 2. ACTION: DETAIL KOMIK
+    // 2. ACTION: DETAIL KOMIK (LENGKAP BESERTA CHAPTER & METADATA)
     // ---------------------------------------------------------
     if (action === "detail" && rawId) {
       const { prefix, realId } = parseId(rawId);
@@ -264,16 +271,13 @@ export async function GET(request: Request) {
              const origLang = m.attributes?.originalLanguage;
              typeStr = origLang === "ko" ? "Manhwa" : (origLang === "zh" || origLang === "zh-hk") ? "Manhua" : "Manga";
 
-             // Author
              const authorRel = m.relationships?.find((r: any) => r.type === "author" || r.type === "artist");
              if (authorRel?.attributes?.name) author = authorRel.attributes.name;
 
-             // Genres
              if (Array.isArray(m.attributes?.tags)) {
                genres = m.attributes.tags.map((t: any) => t.attributes?.name?.en).filter(Boolean);
              }
 
-             // Cover
              const coverRel = m.relationships?.find((r: any) => r.type === "cover_art");
              if (coverRel?.attributes?.fileName) {
                coverUrl = wrapProxy(`https://uploads.mangadex.org/covers/${realId}/${coverRel.attributes.fileName}.512.jpg`);
@@ -281,12 +285,10 @@ export async function GET(request: Request) {
           }
         }
 
-        // Parse MangaDex Chapters
         if (feedRes.status === "fulfilled" && feedRes.value.ok) {
           const fData = await feedRes.value.json();
           let feedList = fData.data || [];
 
-          // Fallback jika id/en kosong: ambil semua bahasa
           if (feedList.length === 0) {
             try {
               const fallbackRes = await fetch(`https://api.mangadex.org/manga/${realId}/feed?limit=500&order[chapter]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica`, { signal: AbortSignal.timeout(6000) });
@@ -303,17 +305,11 @@ export async function GET(request: Request) {
             const lang = (ch.attributes?.translatedLanguage || "id").toUpperCase();
             
             let displayTitle = "";
-            if (cNum !== null && cNum !== undefined && cNum !== "") {
-              displayTitle = `Chapter ${cNum}`;
-            } else {
-              displayTitle = "Oneshot / Extra";
-            }
+            if (cNum !== null && cNum !== undefined && cNum !== "") displayTitle = `Chapter ${cNum}`;
+            else displayTitle = "Oneshot / Extra";
             
-            if (cTitle && cTitle !== "null" && cTitle.trim() !== "" && cTitle !== "0") {
-              displayTitle += ` - ${cTitle}`;
-            } else if (cNum === "0") {
-              displayTitle = "Chapter 0 - Prolog";
-            }
+            if (cTitle && cTitle !== "null" && cTitle.trim() !== "" && cTitle !== "0") displayTitle += ` - ${cTitle}`;
+            else if (cNum === "0") displayTitle = "Chapter 0 - Prolog";
 
             return {
               id: ch.id,
@@ -371,45 +367,110 @@ export async function GET(request: Request) {
         }
       }
 
-      // DETAIL: FULLMANHWA
+      // DETAIL: FULLMANHWA (PARSING LENGKAP)
       else if (prefix === "fm") {
-        const res = await fetch(`https://fullmanhwa.com/manga/${realId}/`, { signal: AbortSignal.timeout(8000) });
+        const res = await fetch(`https://fullmanhwa.com/manga/${realId}/`, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Referer": "https://fullmanhwa.com/"
+          },
+          signal: AbortSignal.timeout(8000)
+        });
+
         if (res.ok) {
           const html = await res.text();
-          const tMatch = html.match(/<h1 itemprop="name"[^>]*>([\s\S]*?)<\/h1>/i) || html.match(/<h1 class="entry-title"[^>]*>([\s\S]*?)<\/h1>/i);
-          const cMatch = html.match(/<div class="thumb"[\s\S]*?<img[^>]+src="([^"]+)"/i);
-          const dMatch = html.match(/<div itemprop="description"[\s\S]*?>([\s\S]*?)<\/div>/i) || html.match(/<div class="entry-content"[^>]*>([\s\S]*?)<\/div>/i);
-
+          
+          // Title
+          const tMatch = html.match(/<h1[^>]*class="[^"]*entry-title[^"]*"[^>]*>([\s\S]*?)<\/h1>/i) || 
+                        html.match(/<h1[^>]*itemprop="name"[^>]*>([\s\S]*?)<\/h1>/i) ||
+                        html.match(/<div class="post-title">[\s\S]*?<h1>([\s\S]*?)<\/h1>/i);
           title = tMatch ? tMatch[1].replace(/<\/?[^>]+(>|$)/g, "").trim() : realId.replace(/-/g, " ");
-          coverUrl = cMatch ? wrapProxy(cMatch[1].trim()) : "";
-          description = dMatch ? dMatch[1].trim().replace(/<[^>]+>/g, '') : "Tidak ada sinopsis.";
 
-          const chRegex = /<li[^>]*>[\s\S]*?<a[^>]+href="https?:\/\/fullmanhwa\.com\/([^/"]+)\/?"[^>]*>([\s\S]*?)<\/a>/gi;
+          // Cover
+          const cMatch = html.match(/<div class="thumb"[\s\S]*?<img[^>]+(?:src|data-src)="([^"]+)"/i) ||
+                        html.match(/<div class="summary_image"[\s\S]*?<img[^>]+(?:src|data-src)="([^"]+)"/i);
+          coverUrl = cMatch ? wrapProxy(cMatch[1].trim()) : "";
+
+          // Synopsis
+          const dMatch = html.match(/<div class="entry-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
+                        html.match(/<div itemprop="description"[\s\S]*?>([\s\S]*?)<\/div>/i);
+          description = dMatch ? dMatch[1].trim().replace(/<[^>]+>/g, '').replace(/\s+/g, " ") : "Tidak ada sinopsis tersedia.";
+
+          // Status & Type
+          if (html.toLowerCase().includes("completed") || html.toLowerCase().includes("tamat")) status = "Completed";
+          if (html.toLowerCase().includes("manhua")) typeStr = "Manhua";
+
+          // Genres
+          const genreMatches = html.match(/<span class="mgen">([\s\S]*?)<\/span>/i) || html.match(/<div class="genres-content">([\s\S]*?)<\/div>/i);
+          if (genreMatches) {
+            const gRegex = /<a[^>]*>([^<]+)<\/a>/gi;
+            let gMatch;
+            const foundGenres: string[] = [];
+            while ((gMatch = gRegex.exec(genreMatches[1])) !== null) {
+              foundGenres.push(gMatch[1].trim());
+            }
+            if (foundGenres.length > 0) genres = foundGenres;
+          }
+
+          // Chapters List Multi-Pattern Scraper
+          const seenCh = new Set<string>();
+
+          // Pola 1: Standar Madara/Themesia #chapterlist
+          const chRegex1 = /<li[^>]*data-num="([^"]*)"[^>]*>[\s\S]*?<a[^>]+href="https?:\/\/fullmanhwa\.com\/([^/"]+)\/?"[^>]*>[\s\S]*?<span class="chapternum">([\s\S]*?)<\/span>(?:[\s\S]*?<span class="chapterdate">([\s\S]*?)<\/span>)?/gi;
           let match;
-          while ((match = chRegex.exec(html)) !== null) {
-            const chSlug = match[1].trim();
-            let rawChTitle = match[2].replace(/<\/?[^>]+(>|$)/g, "").trim();
-            if (rawChTitle.toLowerCase().includes("chapter") || chSlug.includes("chapter")) {
-              if (!rawChTitle || rawChTitle === "0") rawChTitle = `Chapter ${chSlug.replace(/[^0-9.]/g, '') || 'Baru'}`;
+          while ((match = chRegex1.exec(html)) !== null) {
+            const chNum = match[1].trim();
+            const chSlug = match[2].trim();
+            const chTitleRaw = match[3].replace(/<\/?[^>]+(>|$)/g, "").trim();
+            const chDate = match[4] ? match[4].replace(/<\/?[^>]+(>|$)/g, "").trim() : "Baru Saja";
+
+            if (!seenCh.has(chSlug) && chSlug !== "manga" && chSlug !== realId) {
+              seenCh.add(chSlug);
               chapters.push({
                 id: chSlug,
                 chapterId: chSlug,
                 chapter_id: chSlug,
                 slug: chSlug,
                 endpoint: chSlug,
-                title: rawChTitle,
-                name: rawChTitle,
-                chapter: chSlug.replace(/[^0-9.]/g, '') || "0",
-                chapterNumber: chSlug.replace(/[^0-9.]/g, '') || "0",
+                title: chTitleRaw || `Chapter ${chNum || chSlug.replace(/[^0-9.]/g, '')}`,
+                name: chTitleRaw || `Chapter ${chNum || chSlug.replace(/[^0-9.]/g, '')}`,
+                chapter: chNum || chSlug.replace(/[^0-9.]/g, '') || "0",
+                chapterNumber: chNum || chSlug.replace(/[^0-9.]/g, '') || "0",
                 lang: "id",
-                date: "Baru Saja",
+                date: chDate,
               });
+            }
+          }
+
+          // Pola 2: Fallback Pola Link Umum FullManhwa
+          if (chapters.length === 0) {
+            const chRegex2 = /<a[^>]+href="https?:\/\/fullmanhwa\.com\/([^/"]+)\/?"[^>]*>[\s\S]*?(Chapter\s*[\d.]+[^\n<]*)/gi;
+            let m2;
+            while ((m2 = chRegex2.exec(html)) !== null) {
+              const chSlug = m2[1].trim();
+              const chTitle = m2[2].replace(/<\/?[^>]+(>|$)/g, "").trim();
+              if (!seenCh.has(chSlug) && (chSlug.includes("chapter") || chSlug.includes("ch-"))) {
+                seenCh.add(chSlug);
+                chapters.push({
+                  id: chSlug,
+                  chapterId: chSlug,
+                  chapter_id: chSlug,
+                  slug: chSlug,
+                  endpoint: chSlug,
+                  title: chTitle,
+                  name: chTitle,
+                  chapter: chSlug.replace(/[^0-9.]/g, '') || "0",
+                  chapterNumber: chSlug.replace(/[^0-9.]/g, '') || "0",
+                  lang: "id",
+                  date: "Baru Saja",
+                });
+              }
             }
           }
         }
       }
 
-      // DETAIL: FALLBACK SUMBER LAIN
+      // DETAIL: FALLBACK SUMBER LAIN (E.G. OMEGA)
       else {
         title = `Komik (${prefix})`;
         description = `Sumber web '${prefix}' saat ini tidak aktif atau sedang dalam pemeliharaan.`;
@@ -460,7 +521,7 @@ export async function GET(request: Request) {
     }
 
     // ---------------------------------------------------------
-    // 3. ACTION: READ (BACA CHAPTER GAMBAR)
+    // 3. ACTION: READ (BACA CHAPTER LENGKAP)
     // ---------------------------------------------------------
     if (action === "read" && rawId && rawChapter) {
       const { prefix } = parseId(rawId);
@@ -512,27 +573,47 @@ export async function GET(request: Request) {
          }, 200, true);
       }
 
-      // READ: FULLMANHWA
+      // READ: FULLMANHWA (BACA CHAPTER LENGKAP & ANTI BLOKIR)
       if (prefix === "fm") {
         if (!FM_READ_ENABLED) {
           return createResponse({ error: "Server FullManhwa sedang tidak stabil. Silakan baca melalui MangaDex atau Komiku." }, 403);
         }
-        const res = await fetch(`https://fullmanhwa.com/${cleanChapterId}/`, { signal: AbortSignal.timeout(9000) });
-        if (!res.ok) return createResponse({ error: "Gagal menghubungi server FullManhwa." }, 502);
+
+        const chapterUrl = cleanChapterId.startsWith("http") ? cleanChapterId : `https://fullmanhwa.com/${cleanChapterId}/`;
+        const res = await fetch(chapterUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Referer": "https://fullmanhwa.com/"
+          },
+          signal: AbortSignal.timeout(9500)
+        });
+
+        if (!res.ok) return createResponse({ error: `Gagal menghubungi server FullManhwa (Status ${res.status}).` }, 502);
         const html = await res.text();
-        const readerArea = html.match(/<div id="readerarea"[^>]*>([\s\S]*?)<\/div>/i) || html.match(/<div class="reading-content"[^>]*>([\s\S]*?)<\/div>/i);
-        
+
         let images: string[] = [];
+
+        // Ekstraksi area reader
+        const readerArea = html.match(/<div id="readerarea"[^>]*>([\s\S]*?)<\/div>/i) || 
+                          html.match(/<div class="reading-content"[^>]*>([\s\S]*?)<\/div>/i) ||
+                          html.match(/<div class="page-break"[^>]*>([\s\S]*?)<\/div>/i);
+        
         const contentHtml = readerArea ? readerArea[1] : html;
-        const imgRegex = /<img[^>]+src="([^"]+)"/gi;
+        const imgRegex = /<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"/gi;
         let match;
         while ((match = imgRegex.exec(contentHtml)) !== null) {
           const imgUrl = match[1].trim();
-          if (!imgUrl.includes("gif") && !imgUrl.includes("banner") && !imgUrl.includes("logo")) {
-            images.push(imgUrl);
+          if (!imgUrl.includes("gif") && !imgUrl.includes("banner") && !imgUrl.includes("logo") && !imgUrl.includes("loader")) {
+            if (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) {
+              images.push(imgUrl);
+            }
           }
         }
-        if (images.length === 0) return createResponse({ error: "Gambar tidak ditemukan di FullManhwa." }, 404);
+
+        if (images.length === 0) {
+          return createResponse({ error: "Lembar gambar chapter tidak ditemukan di FullManhwa." }, 404);
+        }
+
         return createResponse({
           success: true,
           images,
