@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+// FLAG: FullManhwa read dibatasi karena cloud instability
 const FM_READ_ENABLED = false;
 
 function formatWaktu(dateString: string) {
@@ -16,6 +17,12 @@ function parseId(rawId: string) {
   const parts = rawId.split(":");
   if (parts.length > 1) return { prefix: parts[0], realId: parts.slice(1).join(":") };
   return { prefix: "md", realId: rawId };
+}
+
+function wrapProxy(url: string) {
+  if (!url) return "";
+  if (url.startsWith("/api/komik/image")) return url;
+  return `/api/komik/image?url=${encodeURIComponent(url)}`;
 }
 
 function createResponse(data: any, status = 200, isCacheable = false) {
@@ -45,8 +52,8 @@ export async function GET(request: Request) {
       const page = Number(searchParams.get("page") || "1");
       const limit = 20;
       const offset = (page - 1) * limit;
-
       const allowCache = (!query && sort !== "populer" && page === 1);
+
       const tasks: Promise<any[]>[] = [];
 
       // 1. ENGINE MANGADEX
@@ -54,7 +61,7 @@ export async function GET(request: Request) {
         tasks.push(
           (async () => {
             try {
-              let mdUrl = `https://api.mangadex.org/manga?includes[]=cover_art&limit=${limit}&offset=${offset}`;
+              let mdUrl = `https://api.mangadex.org/manga?includes[]=cover_art&limit=${limit}&offset=${offset}&contentRating[]=safe&contentRating[]=suggestive`;
               if (query) mdUrl += `&title=${encodeURIComponent(query)}`;
               else if (sort === "populer") mdUrl += `&order[rating]=desc`;
               else mdUrl += `&order[updatedAt]=desc`;
@@ -63,21 +70,35 @@ export async function GET(request: Request) {
               if (!res.ok) return [];
               
               const data = await res.json();
-              return data.data?.map((manga: any) => {
-                const cover = manga.relationships?.find((r: any) => r.type === "cover_art");
-                const coverFile = cover?.attributes?.fileName;
-                const lastCh = manga.attributes.lastChapter;
+              return (data.data || []).map((manga: any) => {
+                const coverRel = manga.relationships?.find((r: any) => r.type === "cover_art");
+                const coverFile = coverRel?.attributes?.fileName;
+                const rawCover = coverFile ? `https://uploads.mangadex.org/covers/${manga.id}/${coverFile}.256.jpg` : "";
+
+                const titles = manga.attributes?.title || {};
+                const titleStr = titles.en || titles.id || titles["ja-ro"] || titles.ja || Object.values(titles)[0] || "Judul Tidak Diketahui";
+
+                const lastCh = manga.attributes?.lastChapter;
+                const chLabel = lastCh ? (String(lastCh).toLowerCase().startsWith("ch") ? String(lastCh) : `Ch. ${lastCh}`) : "Ch. Baru";
+                const origLang = manga.attributes?.originalLanguage;
+                const typeStr = origLang === "ko" ? "Manhwa" : (origLang === "zh" || origLang === "zh-hk") ? "Manhua" : "Manga";
+
                 return {
                   id: `md:${manga.id}`,
-                  title: manga.attributes.title?.en || manga.attributes.title?.id || manga.attributes.title?.["ja-ro"] || "Judul Tidak Diketahui",
-                  // PERBAIKAN COVER: Wajib proxy & size 256.jpg untuk performa
-                  cover: coverFile ? `/api/komik/image?url=${encodeURIComponent(`https://uploads.mangadex.org/covers/${manga.id}/${coverFile}.256.jpg`)}` : "",
-                  type: manga.attributes.originalLanguage === "ko" ? "Manhwa" : manga.attributes.originalLanguage === "zh" ? "Manhua" : "Manga",
-                  source: "MangaDex",
-                  latestChapter: lastCh ? `Ch. ${lastCh}` : "Update Baru",
-                  updateOn: formatWaktu(manga.attributes.updatedAt || manga.attributes.createdAt)
+                  title: titleStr,
+                  cover: wrapProxy(rawCover),
+                  type: typeStr,
+                  typeLabel: typeStr,
+                  source: "mangadex",
+                  chapter: chLabel,
+                  latestChapter: chLabel,
+                  latest_chapter: chLabel,
+                  statusLabel: chLabel,
+                  rating: "8.9",
+                  score: 8.9,
+                  updateOn: formatWaktu(manga.attributes?.updatedAt || manga.attributes?.createdAt)
                 };
-              }) || [];
+              });
             } catch { return []; } 
           })()
         );
@@ -97,18 +118,36 @@ export async function GET(request: Request) {
               
               const html = await res.text();
               const results: any[] = [];
-              const regex = /<div class="bge">[\s\S]*?<a href="\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"[\s\S]*?<h[34][^>]*>([^<]+)<\/h[34]>([\s\S]*?)<\/div>\s*<\/div>/gi;
+              const regex = /<div class="bge">[\s\S]*?<a href="\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"[\s\S]*?<h[34][^>]*>([\s\S]*?)<\/h[34]>([\s\S]*?)<\/div>\s*<\/div>/gi;
               
               let match;
               while ((match = regex.exec(html)) !== null && results.length < limit) {
-                const chMatch = (match[4] || "").match(/Chapter\s*[\d.]+/i);
+                const slug = match[1].trim();
+                const rawCover = match[2].split("?")[0].trim();
+                let rawTitle = match[3].replace(/<\/?[^>]+(>|$)/g, "").trim();
+                
+                // Cegah judul komik terdeteksi sebagai "Chapter X"
+                if (rawTitle.toLowerCase().startsWith("chapter ") && !rawTitle.toLowerCase().includes("komik")) {
+                  rawTitle = `Komik ${slug.replace(/-/g, " ")}`;
+                }
+
+                const extraHtml = match[4] || "";
+                const chMatch = extraHtml.match(/(?:Chapter|Ch\.)\s*[\d.]+/i);
+                const chLabel = chMatch ? chMatch[0].replace("Chapter", "Ch.") : "Ch. Baru";
+
                 results.push({
-                  id: `komiku:${match[1]}`,
-                  title: match[3].replace(/<\/?[^>]+(>|$)/g, "").trim(),
-                  cover: match[2].split("?")[0].trim(),
-                  type: "Manhwa/Manhua (ID)",
-                  source: "Komiku",
-                  latestChapter: chMatch ? chMatch[0] : "Terbaru",
+                  id: `komiku:${slug}`,
+                  title: rawTitle,
+                  cover: wrapProxy(rawCover),
+                  type: "Manhwa/Manhua",
+                  typeLabel: "Manhwa/Manhua",
+                  source: "komiku",
+                  chapter: chLabel,
+                  latestChapter: chLabel,
+                  latest_chapter: chLabel,
+                  statusLabel: chLabel,
+                  rating: "8.7",
+                  score: 8.7,
                   updateOn: formatWaktu(new Date().toISOString())
                 });
               }
@@ -132,20 +171,31 @@ export async function GET(request: Request) {
               
               const html = await res.text();
               const results: any[] = [];
-              const regex = /<div class="bsx">[\s\S]*?<a href="[^"]*\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<div class="tt">\s*([^<]+)\s*<\/div>([\s\S]*?)<\/a>/gi;
+              const regex = /<div class="bsx">[\s\S]*?<a href="[^"]*\/manga\/([^/]+)\/"[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<div class="tt">\s*([\s\S]*?)\s*<\/div>([\s\S]*?)<\/a>/gi;
               
               let match;
               while ((match = regex.exec(html)) !== null && results.length < limit) {
+                const slug = match[1].trim();
+                const rawCover = match[2].trim();
+                let rawTitle = match[3].replace(/<\/?[^>]+(>|$)/g, "").trim();
+
                 const extraHtml = match[4] || "";
                 const chMatch = extraHtml.match(/<div class="epxs">([^<]+)<\/div>/i);
-                
+                const chLabel = chMatch ? chMatch[1].trim().replace("Chapter", "Ch.") : "Ch. Baru";
+
                 results.push({
-                  id: `fm:${match[1]}`,
-                  title: match[3].trim(),
-                  cover: match[2].trim(),
-                  type: "Manhwa (ID)",
-                  source: "FullManhwa",
-                  latestChapter: chMatch ? chMatch[1].trim() : "Terbaru",
+                  id: `fm:${slug}`,
+                  title: rawTitle || slug.replace(/-/g, " "),
+                  cover: wrapProxy(rawCover),
+                  type: "Manhwa",
+                  typeLabel: "Manhwa",
+                  source: "fullmanhwa",
+                  chapter: chLabel,
+                  latestChapter: chLabel,
+                  latest_chapter: chLabel,
+                  statusLabel: chLabel,
+                  rating: "8.6",
+                  score: 8.6,
                   updateOn: formatWaktu(new Date().toISOString())
                 });
               }
@@ -157,23 +207,19 @@ export async function GET(request: Request) {
 
       const settled = await Promise.allSettled(tasks);
       const combined: any[] = [];
-      settled.forEach(res => { if (res.status === "fulfilled" && Array.isArray(res.value)) combined.push(...res.value); });
-      
-      // PERBAIKAN SHAPE JSON: Normalisasi untuk komponen HomeClient lawas
-      const normalized = (combined || []).map((x: any) => ({
-        ...x,
-        typeLabel: x.typeLabel || x.type || x.source,
-        statusLabel: x.statusLabel || x.latestChapter || "",
-        source: String(x.source || "").toLowerCase().replace("mangadex", "mangadex"),
-      }));
+      settled.forEach(res => {
+        if (res.status === "fulfilled" && Array.isArray(res.value)) {
+          combined.push(...res.value);
+        }
+      });
 
       return createResponse({
         success: true,
-        data: normalized,
-        list: normalized,
-        latest: normalized,
-        popular: normalized,
-        topRated: normalized.slice(0, 12),
+        data: combined,
+        list: combined,
+        latest: combined,
+        popular: combined,
+        topRated: combined.slice(0, 12),
         sources: ["mangadex", "komiku", "fullmanhwa", "omega"],
       }, 200, allowCache);
     }
@@ -184,9 +230,9 @@ export async function GET(request: Request) {
     if (action === "detail" && id) {
       const { prefix, realId } = parseId(id);
       
-      let title = "Komik Tidak Ditemukan";
+      let title = "Judul Tidak Diketahui";
       let coverUrl = "";
-      let description = "Data komik tidak dapat dimuat atau sumber tidak dikenali.";
+      let description = "Tidak ada sinopsis tersedia.";
       let chapters: any[] = [];
 
       if (prefix === "md") {
@@ -199,20 +245,21 @@ export async function GET(request: Request) {
           const mData = await mangaRes.value.json();
           if (mData?.data) {
              const m = mData.data;
-             title = m.attributes?.title?.en || m.attributes?.title?.id || m.attributes?.title?.["ja-ro"] || "Judul Tidak Diketahui";
-             description = m.attributes?.description?.id || m.attributes?.description?.en || "Tidak ada sinopsis tersedia.";
+             const titles = m.attributes?.title || {};
+             title = titles.en || titles.id || titles["ja-ro"] || titles.ja || Object.values(titles)[0] || title;
+             description = m.attributes?.description?.id || m.attributes?.description?.en || description;
              const coverRel = m.relationships?.find((r: any) => r.type === "cover_art");
              if (coverRel?.attributes?.fileName) {
-               coverUrl = `/api/komik/image?url=${encodeURIComponent(`https://uploads.mangadex.org/covers/${realId}/${coverRel.attributes.fileName}.512.jpg`)}`;
+               coverUrl = wrapProxy(`https://uploads.mangadex.org/covers/${realId}/${coverRel.attributes.fileName}.512.jpg`);
              }
           }
         }
 
         if (feedRes.status === "fulfilled" && feedRes.value.ok) {
           const fData = await feedRes.value.json();
-          chapters = fData.data?.map((ch: any) => {
-            const cNum = ch.attributes.chapter;
-            const cTitle = ch.attributes.title;
+          chapters = (fData.data || []).map((ch: any) => {
+            const cNum = ch.attributes?.chapter;
+            const cTitle = ch.attributes?.title;
             let finalTitle = "";
             if (cNum !== null && cNum !== undefined && cNum !== "") finalTitle = `Ch. ${cNum}`;
             else finalTitle = "Oneshot / Extra";
@@ -222,29 +269,29 @@ export async function GET(request: Request) {
             
             return {
               chapterId: ch.id,
-              title: `${finalTitle} [${(ch.attributes.translatedLanguage || 'ID').toUpperCase()}]`,
-              lang: ch.attributes.translatedLanguage,
+              title: `${finalTitle} [${(ch.attributes?.translatedLanguage || 'ID').toUpperCase()}]`,
+              lang: ch.attributes?.translatedLanguage,
             };
-          }) || [];
+          });
         }
       }
       else if (prefix === "komiku") {
         const res = await fetch(`https://komiku.id/manga/${realId}/`, { signal: AbortSignal.timeout(8000) });
         if (res.ok) {
           const html = await res.text();
-          const tMatch = html.match(/<h1 itemprop="name"[^>]*>([^<]+)<\/h1>/i);
-          const cMatch = html.match(/<div class="ims">[\s\S]*?<img[^>]+src="([^"]+)"/i);
+          const tMatch = html.match(/<h1 itemprop="name"[^>]*>([\s\S]*?)<\/h1>/i);
+          const cMatch = html.match(/<div class="ims">[\s\S]*?<img[^>]+(?:src|data-src)="([^"]+)"/i);
           const dMatch = html.match(/<p class="desc"[^>]*>([\s\S]*?)<\/p>/i);
 
-          title = tMatch ? tMatch[1].trim() : "Judul Tidak Diketahui";
-          coverUrl = cMatch ? cMatch[1].split("?")[0].trim() : "";
+          title = tMatch ? tMatch[1].replace(/<\/?[^>]+(>|$)/g, "").trim() : `Komik ${realId.replace(/-/g, " ")}`;
+          coverUrl = cMatch ? wrapProxy(cMatch[1].split("?")[0].trim()) : "";
           description = dMatch ? dMatch[1].trim().replace(/<[^>]+>/g, '') : "Tidak ada sinopsis.";
 
           const chRegex = /<a href="\/ch\/([^/]+)\/"[^>]*>([\s\S]*?)<\/a>/gi;
           let match;
           while ((match = chRegex.exec(html)) !== null) {
             let chTitle = match[2].replace(/<\/?[^>]+(>|$)/g, "").replace(/\s+/g, " ").trim();
-            if (!chTitle || chTitle === "0") chTitle = `Chapter ${match[1].replace(/[^0-9]/g, '') || 'Extra'}`;
+            if (!chTitle || chTitle === "0") chTitle = `Chapter ${match[1].replace(/[^0-9]/g, '') || 'Baru'}`;
             if (chTitle.toLowerCase().includes("chapter") || chTitle.toLowerCase().includes("ch")) {
               chapters.push({ chapterId: match[1], title: chTitle, lang: "id" });
             }
@@ -255,30 +302,37 @@ export async function GET(request: Request) {
         const res = await fetch(`https://fullmanhwa.com/manga/${realId}/`, { signal: AbortSignal.timeout(8000) });
         if (res.ok) {
           const html = await res.text();
-          const tMatch = html.match(/<h1 itemprop="name"[^>]*>([^<]+)<\/h1>/i) || html.match(/<h1 class="entry-title"[^>]*>([^<]+)<\/h1>/i);
+          const tMatch = html.match(/<h1 itemprop="name"[^>]*>([\s\S]*?)<\/h1>/i) || html.match(/<h1 class="entry-title"[^>]*>([\s\S]*?)<\/h1>/i);
           const cMatch = html.match(/<div class="thumb"[\s\S]*?<img[^>]+src="([^"]+)"/i);
           const dMatch = html.match(/<div itemprop="description"[\s\S]*?>([\s\S]*?)<\/div>/i) || html.match(/<div class="entry-content"[^>]*>([\s\S]*?)<\/div>/i);
 
-          title = tMatch ? tMatch[1].trim() : "Judul Tidak Diketahui";
-          coverUrl = cMatch ? cMatch[1].trim() : "";
+          title = tMatch ? tMatch[1].replace(/<\/?[^>]+(>|$)/g, "").trim() : realId.replace(/-/g, " ");
+          coverUrl = cMatch ? wrapProxy(cMatch[1].trim()) : "";
           description = dMatch ? dMatch[1].trim().replace(/<[^>]+>/g, '') : "Tidak ada sinopsis.";
 
           const chRegex = /<li[^>]*data-num[^>]*>[\s\S]*?<a href="[^"]*\/([^/]+)\/"[^>]*>[\s\S]*?<span class="chapternum">([^<]+)<\/span>/gi;
           let match;
           while ((match = chRegex.exec(html)) !== null) {
             let chTitle = match[2].trim();
-            if (!chTitle || chTitle === "0") chTitle = `Chapter ${match[1].replace(/[^0-9]/g, '') || 'Extra'}`;
+            if (!chTitle || chTitle === "0") chTitle = `Chapter ${match[1].replace(/[^0-9]/g, '') || 'Baru'}`;
             chapters.push({ chapterId: match[1], title: chTitle, lang: "id" });
           }
         }
       }
       else {
-        title = `Komik Eksternal (${prefix})`;
-        description = `Sumber web '${prefix}' saat ini sedang dalam masa pemeliharaan atau tidak didukung lagi.`;
-        chapters = [ { chapterId: "error", title: "Pemberitahuan Sistem (Offline)", lang: "id" } ];
+        title = `Komik (${prefix})`;
+        description = `Sumber web '${prefix}' saat ini tidak aktif atau sedang dalam pemeliharaan.`;
+        chapters = [{ chapterId: "error", title: "Pemberitahuan Sistem (Offline)", lang: "id" }];
       }
 
-      return createResponse({ success: true, title, cover: coverUrl, description, chapters, data: { title, cover: coverUrl, description, chapters } }, 200, true);
+      return createResponse({
+        success: true,
+        title,
+        cover: coverUrl,
+        description,
+        chapters,
+        data: { title, cover: coverUrl, description, chapters }
+      }, 200, true);
     }
 
     // ---------------------------------------------------------
@@ -288,7 +342,7 @@ export async function GET(request: Request) {
       const { prefix } = parseId(id);
 
       if (prefix === "fm" && !FM_READ_ENABLED) {
-        return createResponse({ error: "Server FullManhwa sedang tidak stabil (Rawan 500 Cloudflare). Silakan cari dari MangaDex/Komiku." }, 403);
+        return createResponse({ error: "Server FullManhwa sedang tidak stabil (Rawan 500 Cloudflare). Silakan baca komik ini melalui sumber MangaDex atau Komiku." }, 403);
       }
       if (prefix === "omega" || chapterId === "error") {
         return createResponse({ error: "Sistem tidak dapat memuat gambar karena sumber dari web ini offline." }, 403);

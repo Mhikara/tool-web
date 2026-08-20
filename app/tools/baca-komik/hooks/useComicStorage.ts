@@ -6,6 +6,7 @@ export interface ComicMeta {
   title: string;
   cover: string;
   chapterId?: string;
+  chapterTitle?: string;
   timestamp: number;
 }
 
@@ -14,12 +15,22 @@ export function useComicStorage() {
   const [bookmarks, setBookmarks] = useState<ComicMeta[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load awal saja (mencegah infinite loop)
   useEffect(() => {
     try {
       const hist = localStorage.getItem("comic_history");
       const book = localStorage.getItem("comic_bookmarks");
-      if (hist) setHistory(JSON.parse(hist));
+      if (hist) {
+        const parsed: ComicMeta[] = JSON.parse(hist);
+        // Bersihkan data corrupt lama jika ada item yang judulnya adalah "Chapter X"
+        const cleaned = parsed.map(item => {
+          if (item.title && (item.title.toLowerCase().startsWith("chapter ") || item.title === "0")) {
+            const fallbackTitle = item.id.includes(":") ? item.id.split(":")[1].replace(/-/g, " ") : "Komik Pilihan";
+            return { ...item, title: fallbackTitle.toUpperCase() };
+          }
+          return item;
+        });
+        setHistory(cleaned);
+      }
       if (book) setBookmarks(JSON.parse(book));
     } catch (e) {
       console.error("Gagal parse localStorage:", e);
@@ -28,11 +39,30 @@ export function useComicStorage() {
     }
   }, []);
 
-  // PERBAIKAN: Functional update, tidak perlu masuk array dependency useEffect lain
   const saveHistory = useCallback((comic: Omit<ComicMeta, "timestamp">) => {
     setHistory((prev) => {
+      const existing = prev.find((p) => p.id === comic.id);
+      
+      // Proteksi: jangan timpa title asli komik dengan teks chapter
+      let safeTitle = comic.title;
+      if (!safeTitle || safeTitle.toLowerCase().startsWith("chapter ") || safeTitle === "0") {
+        safeTitle = existing?.title || (comic.id.includes(":") ? comic.id.split(":")[1].replace(/-/g, " ") : "Komik");
+      }
+
+      // Proteksi: jaga cover jika parameter baru kosong
+      const safeCover = comic.cover || existing?.cover || "";
+
+      const newItem: ComicMeta = {
+        id: comic.id,
+        title: safeTitle,
+        cover: safeCover,
+        chapterId: comic.chapterId || existing?.chapterId,
+        chapterTitle: comic.chapterTitle || existing?.chapterTitle || comic.chapterId,
+        timestamp: Date.now()
+      };
+
       const filtered = prev.filter((p) => p.id !== comic.id);
-      const next = [{ ...comic, timestamp: Date.now() }, ...filtered].slice(0, 50); // Max 50
+      const next = [newItem, ...filtered].slice(0, 50);
       localStorage.setItem("comic_history", JSON.stringify(next));
       return next;
     });
@@ -43,9 +73,9 @@ export function useComicStorage() {
       const exists = prev.find((p) => p.id === comic.id);
       let next;
       if (exists) {
-        next = prev.filter((p) => p.id !== comic.id); // Remove
+        next = prev.filter((p) => p.id !== comic.id);
       } else {
-        next = [{ ...comic, timestamp: Date.now() }, ...prev]; // Add
+        next = [{ ...comic, timestamp: Date.now() }, ...prev];
       }
       localStorage.setItem("comic_bookmarks", JSON.stringify(next));
       return next;
