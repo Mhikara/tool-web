@@ -342,7 +342,7 @@ export async function GET(request: Request) {
       ]);
 
       const fmList = fmRes.status === "fulfilled" ? fmRes.value : [];
-      const kmList = kmRes.status === "fulfilled" ? kmRes.value : [];
+      let kmList = kmRes.status === "fulfilled" ? kmRes.value : [];
       const omList = omRes.status === "fulfilled" ? omRes.value : [];
       const mdList = mdRes.status === "fulfilled" ? mdRes.value : [];
 
@@ -370,6 +370,11 @@ export async function GET(request: Request) {
       // Banner / Carousel Hero (ambil 6 teratas dengan rating tertinggi)
       const bannerList = sortedByRating.slice(0, 6);
 
+      // merge Komiku helper (di luar object!)
+      if ((globalThis as any).__kmApiList?.length) {
+        kmList = (globalThis as any).__kmApiList;
+        (globalThis as any).__kmApiList = null;
+      }
       return createResponse({
         success: true,
         data: activeList,
@@ -380,19 +385,13 @@ export async function GET(request: Request) {
         banner: bannerList,
         hero: bannerList,
         featured: bannerList,
-        items: activeList,
-        // merge Komiku helper bila ada
-        if ((globalThis as any).__kmApiList?.length) {
-          kmList.length = 0;
-          kmList.push(...(globalThis as any).__kmApiList);
-          (globalThis as any).__kmApiList = null;
-        }
+        items: activeList
         sources: ["mangadex", "komiku", "fullmanhwa", "omega"],
-        km: { list: ((globalThis as any).__kmApiList?.length ? (globalThis as any).__kmApiList : kmList), latest: kmList, data: kmList, popular: kmList, length: kmList.length },
+        km: { list: kmList, latest: kmList, data: kmList, popular: kmList, length: kmList.length },
         fm: { list: fmList, latest: fmList, data: fmList, popular: fmList, length: fmList.length },
         om: { list: omList, latest: omList, data: omList, popular: omList, length: omList.length },
         md: { list: mdList, latest: mdList, data: mdList, popular: mdList, length: mdList.length },
-        komiku: ((globalThis as any).__kmApiList?.length ? (globalThis as any).__kmApiList : kmList) /* komikuHome merge done */,
+        komiku: kmList,
         fullmanhwa: fmList,
         omega: omList,
         mangadex: mdList,
