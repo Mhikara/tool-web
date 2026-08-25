@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { komikuHome, komikuDetail, komikuRead } from "@/lib/komik/komiku";
 
 const FM_READ_ENABLED = false;
 
@@ -130,6 +131,19 @@ async function fetchMangaDexFallback(params: {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action") || "home";
+      // --- Komiku via helper (API + scrape) ---
+      try {
+        if (action === "home" || action === "search" || action === "katalog") {
+          const _q = searchParams.get("q") || "";
+          const _pop = (searchParams.get("sort") || "") === "populer";
+          const kmApiList = await komikuHome(20, _q, _pop);
+          if (kmApiList.length) {
+            // overwrite hasil scrape lama bila helper sukses
+            (globalThis as any).__kmApiList = kmApiList;
+          }
+        }
+      } catch {}
+
   const rawId = searchParams.get("id") || "";
   const rawChapter = searchParams.get("chapter") || searchParams.get("chapterId") || searchParams.get("chapter_id") || "";
   const sourceFilter = (searchParams.get("source") || "semua").toLowerCase();
@@ -222,12 +236,12 @@ export async function GET(request: Request) {
       const fetchKomiku = async () => {
         let results: any[] = [];
         try {
-          let url = `https://komiku.id/pustaka/?orderby=modified`;
-          if (query) url = `https://komiku.id/cari/?post_type=manga&s=${encodeURIComponent(query)}`;
-          else if (isPopuler) url = `https://komiku.id/other/hot/`;
+          let url = `https://komiku.org/pustaka/?orderby=modified`;
+          if (query) url = `https://komiku.org/cari/?post_type=manga&s=${encodeURIComponent(query)}`;
+          else if (isPopuler) url = `https://komiku.org/other/hot/`;
 
           const res = await fetch(url, {
-            headers: { ...COMMON_HEADERS, "Referer": "https://komiku.id/" },
+            headers: { ...COMMON_HEADERS, "Referer": "https://komiku.org/" },
             signal: AbortSignal.timeout(8000)
           });
 
@@ -367,12 +381,18 @@ export async function GET(request: Request) {
         hero: bannerList,
         featured: bannerList,
         items: activeList,
+        // merge Komiku helper bila ada
+        if ((globalThis as any).__kmApiList?.length) {
+          kmList.length = 0;
+          kmList.push(...(globalThis as any).__kmApiList);
+          (globalThis as any).__kmApiList = null;
+        }
         sources: ["mangadex", "komiku", "fullmanhwa", "omega"],
-        km: { list: kmList, latest: kmList, data: kmList, popular: kmList, length: kmList.length },
+        km: { list: ((globalThis as any).__kmApiList?.length ? (globalThis as any).__kmApiList : kmList), latest: kmList, data: kmList, popular: kmList, length: kmList.length },
         fm: { list: fmList, latest: fmList, data: fmList, popular: fmList, length: fmList.length },
         om: { list: omList, latest: omList, data: omList, popular: omList, length: omList.length },
         md: { list: mdList, latest: mdList, data: mdList, popular: mdList, length: mdList.length },
-        komiku: kmList,
+        komiku: ((globalThis as any).__kmApiList?.length ? (globalThis as any).__kmApiList : kmList) /* komikuHome merge done */,
         fullmanhwa: fmList,
         omega: omList,
         mangadex: mdList,
@@ -520,9 +540,21 @@ export async function GET(request: Request) {
 
       // DETAIL: KOMIKU (Scrape Asli)
       else if (prefix === "komiku") {
+        const kd = await komikuDetail(realId);
+        if (kd) {
+          title = kd.title;
+          coverUrl = kd.cover;
+          description = kd.description || description;
+          status = kd.status || status;
+          typeStr = kd.type || typeStr;
+          author = kd.author || author;
+          genres = Array.isArray(kd.genres) ? kd.genres : genres;
+          chapters = kd.chapters || [];
+        } else {
+
         try {
-          const res = await fetch(`https://komiku.id/manga/${realId}/`, {
-            headers: { ...COMMON_HEADERS, "Referer": "https://komiku.id/" },
+          const res = await fetch(`https://komiku.org/manga/${realId}/`, {
+            headers: { ...COMMON_HEADERS, "Referer": "https://komiku.org/" },
             signal: AbortSignal.timeout(7000)
           });
           if (res.ok) {
@@ -682,30 +714,16 @@ export async function GET(request: Request) {
 
       // READ: KOMIKU
       if (prefix === "komiku") {
-         const res = await fetch(`https://komiku.id/ch/${cleanChapterId}/`, {
-           headers: { ...COMMON_HEADERS, "Referer": "https://komiku.id/" },
-           signal: AbortSignal.timeout(9000)
-         });
-         if (!res.ok) return createResponse({ error: "Gagal menghubungi server Komiku." }, 502);
-         const html = await res.text();
-         
-         let images: string[] = [];
-         const imgRegex = /<img[^>]+(?:src|data-src|data-lazy-src)="([^"]+)"/gi;
-         let match;
-         while ((match = imgRegex.exec(html)) !== null) {
-           const imgUrl = match[1].trim();
-           if (!imgUrl.includes("gif") && !imgUrl.includes("banner") && !imgUrl.includes("logo") && !imgUrl.includes("iklan") && !imgUrl.includes("avatar")) {
-             if (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) {
-               images.push(imgUrl);
-             }
-           }
-         }
-         if (images.length === 0) return createResponse({ error: "Gambar chapter tidak ditemukan." }, 404);
-         return createResponse({
-           success: true,
-           images,
-           chapter: { images, totalImages: images.length }
-         }, 200, true);
+        const kr = await komikuRead(cleanChapterId);
+        if (!kr || !kr.images?.length) {
+          return createResponse({ error: "Gambar chapter Komiku tidak ditemukan." }, 404);
+        }
+        return createResponse({
+          success: true,
+          images: kr.images,
+          pages: kr.pages || kr.images,
+          chapter: { images: kr.images, totalImages: kr.images.length },
+        }, 200, true);
       }
 
       // READ: FULLMANHWA
