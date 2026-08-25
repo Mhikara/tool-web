@@ -152,7 +152,7 @@ export async function GET(request: Request) {
 
           const res = await fetch(url, {
             headers: { ...COMMON_HEADERS, "Referer": "https://fullmanhwa.com/" },
-            signal: AbortSignal.timeout(4000)
+            signal: AbortSignal.timeout(8000)
           });
 
           if (res.ok) {
@@ -223,7 +223,7 @@ export async function GET(request: Request) {
 
           const res = await fetch(url, {
             headers: { ...COMMON_HEADERS, "Referer": "https://komiku.id/" },
-            signal: AbortSignal.timeout(4000)
+            signal: AbortSignal.timeout(8000)
           });
 
           if (res.ok) {
