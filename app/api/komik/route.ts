@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 
-const FM_READ_ENABLED = true;
+const FM_READ_ENABLED = false;
+
+const MD_HEADERS: HeadersInit = {
+  Accept: "application/json",
+  "User-Agent": "tool-web-baca-komik/1.0",
+};
 
 const COMMON_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -391,9 +396,18 @@ export async function GET(request: Request) {
 
       // DETAIL: MANGADEX & OMEGA & UUID FALLBACK
       if (prefix === "md" || prefix === "om" || /^[0-9a-f-]{32,}$/i.test(realId)) {
+        const mdFetch = (url: string, ms = 10000) =>
+          fetch(url, { headers: MD_HEADERS, signal: AbortSignal.timeout(ms) });
+
         const [mangaRes, feedRes] = await Promise.allSettled([
-          fetch(`https://api.mangadex.org/manga/${realId}?includes[]=cover_art&includes[]=author&includes[]=artist`, { signal: AbortSignal.timeout(8000) }),
-          fetch(`https://api.mangadex.org/manga/${realId}/feed?translatedLanguage[]=id&translatedLanguage[]=en&limit=500&order[chapter]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic`, { signal: AbortSignal.timeout(8000) })
+          mdFetch(`https://api.mangadex.org/manga/${realId}?includes[]=cover_art&includes[]=author&includes[]=artist`),
+          mdFetch(
+            `https://api.mangadex.org/manga/${realId}/feed?` +
+              `limit=500&order[chapter]=desc` +
+              `&translatedLanguage[]=id&translatedLanguage[]=en` +
+              `&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic` +
+              `&includes[]=scanlation_group`
+          ),
         ]);
         
         if (mangaRes.status === "fulfilled" && mangaRes.value.ok) {
@@ -427,13 +441,53 @@ export async function GET(request: Request) {
 
           if (feedList.length === 0) {
             try {
-              const fallbackRes = await fetch(`https://api.mangadex.org/manga/${realId}/feed?limit=500&order[chapter]=desc&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica`, { signal: AbortSignal.timeout(6000) });
+              const fallbackRes = await fetch(
+                `https://api.mangadex.org/manga/${realId}/feed?limit=500&offset=0&order[chapter]=desc` +
+                  `&contentRating[]=safe&contentRating[]=suggestive&contentRating[]=erotica&contentRating[]=pornographic`,
+                { headers: MD_HEADERS, signal: AbortSignal.timeout(10000) }
+              );
               if (fallbackRes.ok) {
                 const fbJson = await fallbackRes.json();
                 feedList = fbJson.data || [];
               }
             } catch {}
           }
+
+          // dedupe chapter number+lang, sort numeric desc
+          const seen = new Set<string>();
+          chapters = (feedList as any[])
+            .map((ch: any) => {
+              const cNum = ch.attributes?.chapter;
+              const cTitle = ch.attributes?.title;
+              const lang = (ch.attributes?.translatedLanguage || "en").toUpperCase();
+              let displayTitle = cNum !== null && cNum !== undefined && cNum !== "" ? `Chapter ${cNum}` : "Oneshot / Extra";
+              if (cTitle && String(cTitle).trim() && cTitle !== "null" && cTitle !== "0") displayTitle += ` - ${cTitle}`;
+              const key = `\( {cNum || "x"}- \){lang}-${ch.id}`;
+              return {
+                id: ch.id,
+                chapterId: ch.id,
+                chapter_id: ch.id,
+                slug: ch.id,
+                endpoint: ch.id,
+                title: `\( {displayTitle} [ \){lang}]`,
+                name: `\( {displayTitle} [ \){lang}]`,
+                chapter: cNum || "0",
+                chapterNumber: cNum || "0",
+                lang: ch.attributes?.translatedLanguage || "en",
+                date: formatWaktu(ch.attributes?.publishAt || ch.attributes?.createdAt),
+                _key: key,
+                _n: parseFloat(cNum) || 0,
+              };
+            })
+            .filter((c: any) => {
+              if (seen.has(c.id)) return false;
+              seen.add(c.id);
+              return true;
+            })
+            .sort((a: any, b: any) => b._n - a._n)
+            .map(({ _key, _n, ...rest }: any) => rest);
+          // skip default map below
+          feedList = [];
 
           chapters = feedList.map((ch: any) => {
             const cNum = ch.attributes?.chapter;
