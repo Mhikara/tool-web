@@ -385,7 +385,7 @@ export async function GET(request: Request) {
         banner: bannerList,
         hero: bannerList,
         featured: bannerList,
-        items: activeList
+        items: activeList,
         sources: ["mangadex", "komiku", "fullmanhwa", "omega"],
         km: { list: kmList, latest: kmList, data: kmList, popular: kmList, length: kmList.length },
         fm: { list: fmList, latest: fmList, data: fmList, popular: fmList, length: fmList.length },
