@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import ffmpegPath from "ffmpeg-static";
-import ffmpeg from "fluent-ffmpeg";
+import ffmpeg from "../../../lib/ffmpeg";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -9,7 +8,6 @@ import { PassThrough } from "stream";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath as string);
 
 function getVideoDuration(filePath: string): Promise<number> {
   return new Promise((resolve, reject) => {

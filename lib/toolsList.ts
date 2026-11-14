@@ -9,21 +9,21 @@ export type SimpleTool = {
 
 export const toolsList: SimpleTool[] = [
   {
+    slug: "premium-bypasser",
     title: "Premium Bypasser",
-    desc: "Bypass Linkvertise, Workink, & SC Key (No Captcha)",
+    description: "Bypass Linkvertise, Workink, & SC Key (No Captcha)",
     href: "/bypasser",
     icon: "🔓",
     tag: "Tools",
   },
-
   {
+    slug: "roblox-sc-finder",
     title: "Roblox SC Finder",
-    desc: "Cari SC No Key & Anti-Patched (Real-Time)",
+    description: "Cari SC No Key & Anti-Patched (Real-Time)",
     href: "/roblox",
     icon: "🎮",
     tag: "Tools",
   },
-
   {
     slug: "baca-komik",
     title: "Baca Komik",
@@ -32,7 +32,6 @@ export const toolsList: SimpleTool[] = [
     icon: "📖",
     href: "/tools/baca-komik",
   },
-
   {
     slug: "fake-data",
     title: "Fake Data",
@@ -41,7 +40,6 @@ export const toolsList: SimpleTool[] = [
     icon: "🧪",
     href: "/tools/fake-data",
   },
-
   {
     slug: "tiktok-hd-upload",
     title: "Upload TikTok HD",
@@ -50,7 +48,6 @@ export const toolsList: SimpleTool[] = [
     icon: "📤",
     href: "/tools/tiktok-hd-upload",
   },
-
   {
     slug: "auto-clip",
     title: "Auto Clip",
@@ -91,7 +88,6 @@ export const toolsList: SimpleTool[] = [
     icon: "🔒",
     href: "/tools/web-encrypt",
   },
-,
   {
     slug: "upload-zip",
     title: "Upload ZIP",
@@ -108,7 +104,6 @@ export const toolsList: SimpleTool[] = [
     icon: "🤖",
     href: "/tools/multi-agent",
   },
-,
   {
     slug: "api-keys",
     title: "API Key Manager",

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import ffmpegPath from "ffmpeg-static";
-import ffmpeg from "fluent-ffmpeg";
+import ffmpeg from "../../../../../lib/ffmpeg";
 import fs from "fs";
 import os from "os";
 import path from "path";
 
-if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath as string);
 
 export async function POST(req: NextRequest) {
   const tempDir = os.tmpdir();

@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,7 +23,19 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ],
+      "@/lib/mangadex": [
+        "./src/lib/mangadex.ts"
+      ],
+      "@/lib/bookmarkStorage": [
+        "./src/lib/bookmarkStorage.ts"
+      ],
+      "@/components/baca-komik/*": [
+        "./components/baca-komik/*",
+        "./src/components/baca-komik/*"
+      ]
     }
   },
   "include": [
@@ -30,5 +46,7 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }
