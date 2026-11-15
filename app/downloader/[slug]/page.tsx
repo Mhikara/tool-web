@@ -18,6 +18,7 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
   const [tiktokMode, setTiktokMode] = useState<"link" | "search">("link");
   const [tiktokResults, setTiktokResults] = useState<any[]>([]);
   const [ytInfo, setYtInfo] = useState<any>(null);
+  const [twitterResult, setTwitterResult] = useState<any>(null);
 
   const wrap = { background: "#0B0710", minHeight: "100vh", color: "#F3EEFA", fontFamily: "sans-serif", padding: 24 };
   const inputStyle = {
@@ -162,36 +163,70 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
     finally { setLoading(false); }
   };
 
-  const handleTerabox = async () => {
-    setLoading(true); setStatus("Memproses...");
+  const handleTwitter = async () => {
+    if (!input.trim()) {
+      setStatus("Tempel link postingan X/Twitter dulu.");
+      return;
+    }
+
+    setLoading(true);
+    setStatus("Mengambil video dari X/Twitter...");
+    setTwitterResult(null);
+
     try {
-      const res = await fetch("/api/downloader/terabox", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: input }),
+      const res = await fetch("/api/downloader/twitter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: input.trim(), action: "info" }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal mengambil video.");
+
+      setTwitterResult(data);
+      setStatus("");
+    } catch (e: any) {
+      setStatus(e.message || "Gagal memproses link X/Twitter.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTwitterDownload = async () => {
+    if (!twitterResult?.mediaUrl) return;
+
+    setLoading(true);
+    setStatus("Mengunduh video X/Twitter...");
+
+    try {
+      const res = await fetch("/api/downloader/twitter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "download",
+          mediaUrl: twitterResult.mediaUrl,
+        }),
+      });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Gagal");
+        throw new Error(err.error || "Gagal mengunduh video.");
       }
-      const ct = res.headers.get("content-type") || "";
-      if (ct.includes("application/json")) {
-        const data = await res.json();
-        if (data.downloadUrl) {
-          window.open(data.downloadUrl, "_blank");
-          setStatus("Link download dibuka.");
-        } else {
-          setStatus(data.error || "Selesai.");
-        }
-      } else {
-        const blob = await res.blob();
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "terabox-file";
-        a.click();
-        setStatus("Selesai diunduh.");
-      }
-    } catch (e: any) { setStatus(e.message || "Gagal memproses."); }
-    finally { setLoading(false); }
+
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = "x-twitter-video.mp4";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+      setStatus("Video berhasil diunduh.");
+    } catch (e: any) {
+      setStatus(e.message || "Gagal mengunduh video.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fmtDuration = (sec: number) => {
@@ -249,7 +284,7 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
                       {ytInfo.videoFormats.map((f: any) => (
                         <button key={f.itag} type="button" disabled={loading} onClick={() => handleYoutubeDownload("mp4", f.itag)}
                           style={{ ...btnStyle, background: "#374151", padding: "10px 14px", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
-                          <span>{f.quality}{f.hasAudio ? "" : " (tanpa audio)"}{f.fps ? " · " + f.fps + "fps" : ""}</span>
+                          <span>{f.quality}{f.fps ? " · " + f.fps + "fps" : ""} · Audio</span>
                           <span style={{ fontSize: 11, opacity: 0.7 }}>{f.size || "Download"}</span>
                         </button>
                       ))}
@@ -275,9 +310,39 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
         )}
         {slug === "instagram" && <button type="button" disabled={loading} onClick={handleInstagram} style={btnStyle}>Ambil Media</button>}
         {slug === "spotify" && <button type="button" disabled={loading} onClick={handleSpotifySearch} style={btnStyle}>Cari Lagu</button>}
-        {slug === "terabox" && <button type="button" disabled={loading} onClick={handleTerabox} style={btnStyle}>Download</button>}
+        {slug === "twitter" && <button type="button" disabled={loading} onClick={handleTwitter} style={btnStyle}>{loading ? "Memproses..." : "Ambil Video"}</button>}
 
         {status && <p style={{ marginTop: 12, fontSize: 13, color: "#9C90AC" }}>{status}</p>}
+
+        {slug === "twitter" && twitterResult && (
+          <div style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#1C1226", border: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
+              {twitterResult.title || "Video X/Twitter"}
+            </div>
+            <div style={{ fontSize: 12, color: "#C4B5FD", marginBottom: 12 }}>
+              @{twitterResult.username || twitterResult.author || "Unknown"}
+            </div>
+            <video
+              controls
+              playsInline
+              preload="metadata"
+              poster={twitterResult.thumbnail || undefined}
+              src={twitterResult.mediaUrl}
+              style={{ width: "100%", maxHeight: 420, borderRadius: 10, background: "#000" }}
+            />
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleTwitterDownload}
+              style={{ ...btnStyle, marginTop: 14, background: "linear-gradient(90deg,#374151,#111827)" }}
+            >
+              {loading ? "Mengunduh..." : "Download Video MP4"}
+            </button>
+          </div>
+        )}
+
+
+
 
         {spotifyUnavailable && (
           <div style={{ marginTop: 16, padding: 16, background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.3)", borderRadius: 12, fontSize: 13, color: "#C4B5FD" }}>
@@ -320,9 +385,16 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#A78BFA", marginBottom: 8 }}>FOTO ({result.images.length})</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {result.images.map((img: string, i: number) => (
-                    <a key={i} href={"/api/downloader/tiktok/file?url=" + encodeURIComponent(img) + "&filename=tiktok-foto-" + (i + 1) + ".jpg"}>
-                      <img src={img} alt="" style={{ width: "100%", borderRadius: 8, aspectRatio: "1", objectFit: "cover" }} />
-                    </a>
+                    <div key={i} style={{ minWidth: 0 }}>
+                      <img src={img} alt={"Foto TikTok " + (i + 1)} style={{ width: "100%", borderRadius: 8, aspectRatio: "1", objectFit: "cover", display: "block" }} />
+                      <a
+                        href={"/api/downloader/tiktok/file?url=" + encodeURIComponent(img) + "&filename=tiktok-foto-" + (i + 1) + ".jpg"}
+                        download={"tiktok-foto-" + (i + 1) + ".jpg"}
+                        style={{ ...btnStyle, display: "block", textAlign: "center", textDecoration: "none", marginTop: 6, padding: "10px 6px", fontSize: 12, background: "linear-gradient(90deg,#7C3AED,#A855F7)" }}
+                      >
+                        Download Foto {i + 1}
+                      </a>
+                    </div>
                   ))}
                 </div>
               </div>

@@ -7,6 +7,9 @@ interface MediaItem {
   hdUrl: string;
   sdUrl: string;
   thumbnail?: string;
+  formatId: string;
+  width?: number;
+  height?: number;
 }
 
 interface SavedMedia {
@@ -24,6 +27,7 @@ export default function InstagramDownloaderPage() {
   const [error, setError] = useState("");
   const [results, setResults] = useState<MediaItem[]>([]);
   const [history, setHistory] = useState<SavedMedia[]>([]);
+  const [downloadingFormat, setDownloadingFormat] = useState<string | null>(null);
 
   // 1. Ambil data dari Local Storage
   useEffect(() => {
@@ -67,6 +71,48 @@ export default function InstagramDownloaderPage() {
       if (text) setUrl(text.trim());
     } catch {
       alert("Silakan tekan lama pada kolom input lalu pilih Tempel.");
+    }
+  };
+
+  // Download melalui engine yt-dlp, lalu simpan sebagai file MP4.
+  const downloadFormat = async (item: MediaItem, quality: "HD" | "SD") => {
+    if (downloadingFormat) return;
+
+    setDownloadingFormat(item.formatId);
+    setError("");
+
+    try {
+      const response = await fetch("/api/downloader/instagram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, format_id: item.formatId }),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data.success || typeof data.downloadVideo !== "string") {
+        throw new Error(data.error || "Gagal memproses video.");
+      }
+
+      const fileResponse = await fetch(data.downloadVideo);
+      if (!fileResponse.ok) {
+        throw new Error("File video gagal diambil.");
+      }
+
+      const blob = await fileResponse.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = `instagram_${quality}_${item.height || "video"}p.mp4`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+
+      saveToLocalStorage(data.downloadVideo, quality, "video", url);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Download gagal.");
+    } finally {
+      setDownloadingFormat(null);
     }
   };
 
@@ -208,37 +254,24 @@ export default function InstagramDownloaderPage() {
                         <h4 className="text-sm font-bold text-gray-800">Pilih Kualitas Resolusi:</h4>
                       </div>
 
-                      {/* Resolusi HD */}
-                      <a
-                        href={item.hdUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download="instagram_media_hd.mp4"
-                        onClick={() => saveToLocalStorage(item.hdUrl, "HD", item.type, url)}
-                        className="w-full bg-gradient-to-r from-[#ff4a11] to-orange-500 hover:from-[#e43f0c] hover:to-orange-600 text-white text-xs font-bold py-3 px-4 rounded-xl text-center shadow-md shadow-orange-500/20 transition-all flex items-center justify-between"
+                      <button
+                        type="button"
+                        disabled={downloadingFormat !== null}
+                        onClick={() => downloadFormat(item, idx === 0 ? "HD" : "SD")}
+                        className="w-full bg-gradient-to-r from-[#ff4a11] to-orange-500 hover:from-[#e43f0c] hover:to-orange-600 disabled:opacity-50 text-white text-xs font-bold py-3 px-4 rounded-xl text-center shadow-md shadow-orange-500/20 transition-all flex items-center justify-between"
                       >
                         <span className="flex items-center gap-2">
-                          <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-extrabold">HD</span>
-                          <span>Download Resolusi HD (1080p)</span>
+                          <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-extrabold">
+                            {idx === 0 ? "HD" : "SD"}
+                          </span>
+                          <span>
+                            {downloadingFormat === item.formatId
+                              ? "Sedang mengunduh..."
+                              : `Download ${item.height || ""}p`}
+                          </span>
                         </span>
                         <span>📥</span>
-                      </a>
-
-                      {/* Resolusi Biasa */}
-                      <a
-                        href={item.sdUrl || item.hdUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download="instagram_media_sd.mp4"
-                        onClick={() => saveToLocalStorage(item.sdUrl || item.hdUrl, "SD", item.type, url)}
-                        className="w-full bg-white hover:bg-gray-100 border border-gray-300 text-gray-700 text-xs font-bold py-2.5 px-4 rounded-xl text-center transition-all flex items-center justify-between"
-                      >
-                        <span className="flex items-center gap-2">
-                          <span className="bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded text-[10px] font-extrabold">SD</span>
-                          <span>Download Resolusi Standar</span>
-                        </span>
-                        <span>⚡</span>
-                      </a>
+                      </button>
                     </div>
 
                   </div>

@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 45;
+export const maxDuration = 60;
 
 async function tryPublicApis(url: string) {
-  // Beberapa endpoint publik yang sering dipakai (gratis, no key)
   const apis = [
     `https://terabox-dl.qtcloud.workers.dev/api?url=${encodeURIComponent(url)}`,
     `https://api.terabox.ps/api?url=${encodeURIComponent(url)}`,
@@ -14,126 +13,154 @@ async function tryPublicApis(url: string) {
     try {
       const res = await fetch(api, {
         headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "User-Agent": "Mozilla/5.0",
+          Accept: "application/json",
         },
         signal: AbortSignal.timeout(12000),
+        cache: "no-store",
       });
+
       if (!res.ok) continue;
       const data = await res.json();
 
-      // Normalisasi response
+      const item = data?.list?.[0] || data?.data || data;
       const direct =
+        item?.downloadLink ||
+        item?.download_link ||
+        item?.direct_link ||
         data?.downloadLink ||
         data?.download_link ||
         data?.direct_link ||
-        data?.data?.downloadLink ||
-        data?.data?.download_link ||
-        data?.list?.[0]?.downloadLink ||
         null;
 
       const name =
+        item?.file_name ||
+        item?.filename ||
         data?.file_name ||
         data?.filename ||
-        data?.data?.file_name ||
-        data?.list?.[0]?.file_name ||
         "terabox-file";
 
-      const size =
-        data?.size || data?.data?.size || data?.list?.[0]?.size || null;
-
+      const size = item?.size || data?.size || null;
       const thumb =
-        data?.thumbnail || data?.data?.thumbnail || data?.list?.[0]?.thumbs?.url3 || null;
+        item?.thumbnail ||
+        item?.thumbs?.url3 ||
+        data?.thumbnail ||
+        null;
 
-      if (direct) {
-        return { direct, name, size, thumb };
+      if (typeof direct === "string") {
+        let parsed: URL;
+        try {
+          parsed = new URL(direct);
+        } catch {
+          continue;
+        }
+        if (parsed.protocol !== "https:") continue;
+        return { direct: parsed.toString(), name, size, thumb };
       }
     } catch {
-      // coba API berikutnya
+      // Coba endpoint berikutnya.
     }
   }
+
   return null;
+}
+
+function validShareUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 4096) return false;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    return [
+      "terabox.com",
+      "1024tera.com",
+      "1024terabox.com",
+      "nephobox.com",
+      "4funbox.com",
+      "teraboxapp.com",
+    ].some((domain) => host === domain || host.endsWith("." + domain));
+  } catch {
+    return false;
+  }
+}
+
+function safeFilename(value: unknown) {
+  const name = String(value || "terabox-file")
+    .replace(/[^\w.\- ]+/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 100);
+  return name || "terabox-file";
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { url } = await req.json();
-    if (!url || typeof url !== "string") {
-      return NextResponse.json({ error: "Link Terabox wajib diisi" }, { status: 400 });
-    }
+    const body = await req.json();
+    const url = body?.url;
+    const action = body?.action || "download";
 
-    if (
-      !url.includes("terabox") &&
-      !url.includes("1024tera") &&
-      !url.includes("nephobox") &&
-      !url.includes("4funbox")
-    ) {
+    if (!validShareUrl(url)) {
       return NextResponse.json(
-        { error: "Link harus dari Terabox / 1024tera" },
+        { error: "Masukkan link HTTPS Terabox yang valid." },
         { status: 400 }
       );
     }
 
-    // Coba API publik
+    if (action !== "info" && action !== "download") {
+      return NextResponse.json({ error: "Aksi tidak valid." }, { status: 400 });
+    }
+
     const parsed = await tryPublicApis(url.trim());
 
-    if (parsed?.direct) {
-      // Stream file lewat proxy
-      const fileRes = await fetch(parsed.direct, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-      });
+    if (!parsed) {
+      return NextResponse.json(
+        { error: "Gagal mengambil data Terabox. Coba link publik lain atau coba lagi nanti." },
+        { status: 502 }
+      );
+    }
 
-      if (fileRes.ok) {
-        const buffer = await fileRes.arrayBuffer();
-        const contentType =
-          fileRes.headers.get("content-type") || "application/octet-stream";
-        const safeName = String(parsed.name).replace(/[^\w.\-]+/g, "_").slice(0, 80);
-
-        return new NextResponse(buffer, {
-          headers: {
-            "Content-Type": contentType,
-            "Content-Disposition": `attachment; filename="${safeName}"`,
-          },
-        });
-      }
-
-      // Kalau stream gagal, kembalikan info link saja
+    if (action === "info") {
       return NextResponse.json({
         name: parsed.name,
         size: parsed.size,
         thumbnail: parsed.thumb,
-        downloadUrl: parsed.direct,
-        note: "Gunakan link langsung di bawah jika download otomatis gagal.",
+        downloadReady: true,
       });
     }
 
-    // Fallback: coba fetch langsung (hanya berhasil jika link sudah direct file)
-    const directRes = await fetch(url, { redirect: "follow" });
-    const ct = directRes.headers.get("content-type") || "";
-    if (!ct.includes("text/html") && directRes.ok) {
-      const buffer = await directRes.arrayBuffer();
-      return new NextResponse(buffer, {
-        headers: {
-          "Content-Type": ct || "application/octet-stream",
-          "Content-Disposition": "attachment; filename=\"terabox-file\"",
+    const fileRes = await fetch(parsed.direct, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(55000),
+      redirect: "follow",
+    });
+
+    if (!fileRes.ok || !fileRes.body) {
+      return NextResponse.json(
+        {
+          error: "Link file ditemukan, tetapi sumber gagal mengirim file. Coba lagi nanti.",
         },
-      });
+        { status: 502 }
+      );
     }
 
-    return NextResponse.json(
-      {
-        error:
-          "Tidak bisa mengekstrak link Terabox ini. Coba link share yang lebih baru atau salin link langsung dari app.",
-      },
-      { status: 501 }
-    );
-  } catch (err: any) {
+    const headers = new Headers({
+      "Content-Type":
+        fileRes.headers.get("content-type") || "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${safeFilename(parsed.name)}"`,
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    });
+
+    const length = fileRes.headers.get("content-length");
+    if (length) headers.set("Content-Length", length);
+
+    return new NextResponse(fileRes.body, {
+      status: 200,
+      headers,
+    });
+  } catch (err: unknown) {
     console.error("[terabox]", err);
     return NextResponse.json(
-      { error: err?.message || "Gagal memproses link Terabox" },
+      { error: "Gagal memproses link Terabox." },
       { status: 500 }
     );
   }

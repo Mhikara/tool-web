@@ -8,64 +8,61 @@ export default function BypasserPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [detectedInfo, setDetectedInfo] = useState<{
+    platform: string;
+    label: string;
+    hostname: string;
+    fileType: string | null;
+    isDirectFile: boolean;
+    fileName: string;
+    fileSizeLabel: string;
+  } | null>(null);
 
   const handleBypass = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!url) return;
-
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      setError("Link harus diawali dengan http:// atau https://");
-      return;
-    }
+    if (!url.trim()) return;
 
     setLoading(true);
     setError("");
     setTargetDestination("");
+    setDetectedInfo(null);
     setCopied(false);
 
     try {
-      // Daftar engine resolver internal untuk mendapatkan tujuan akhir asli
-      const providers = [
-        `https://api.bypass.vip/bypass?url=${encodeURIComponent(url)}`,
-        `https://api.bypass.city/bypass?url=${encodeURIComponent(url)}`,
-        `https://dl.dirbaio.dev/api/bypass?url=${encodeURIComponent(url)}`
-      ];
+      const res = await fetch(
+        `/api/bypass/detect?url=${encodeURIComponent(url.trim())}`,
+        { method: "GET", cache: "no-store" }
+      );
+      const data = await res.json();
 
-      let finalUrl = "";
+      if (!res.ok || !data.success || !data.data) {
+        throw new Error(data.error || `Gagal mendeteksi link (${res.status}).`);
+      }
 
-      for (const apiUrl of providers) {
-        try {
-          const res = await fetch(apiUrl, { signal: AbortSignal.timeout(9000) });
-          if (!res.ok) continue;
+      let preview = null;
 
-          const data = await res.json();
-          const out = data.destination || data.result || data.bypassed_link || data.url;
+      try {
+        const previewRes = await fetch(
+          `/api/bypass/preview?url=${encodeURIComponent(url.trim())}`,
+          { method: "GET", cache: "no-store" }
+        );
+        const previewData = await previewRes.json();
 
-          // Validasi: pastikan output bukan link bypasser lain, melainkan link tujuan asli
-          if (
-            out &&
-            typeof out === "string" &&
-            out.startsWith("http") &&
-            !out.includes("bypass")
-          ) {
-            finalUrl = out;
-            break;
-          } else if (out && typeof out === "string" && out.startsWith("http")) {
-            finalUrl = out;
-            break;
-          }
-        } catch {
-          continue;
+        if (previewRes.ok && previewData.success && previewData.data) {
+          preview = previewData.data;
         }
+      } catch {
+        preview = null;
       }
 
-      if (finalUrl) {
-        setTargetDestination(finalUrl);
-      } else {
-        setError("Gagal mendapatkan link tujuan akhir. Link mungkin sudah kedaluwarsa atau proteksi terlalu ketat.");
-      }
+      setDetectedInfo({
+        ...data.data,
+        fileName: preview?.fileName || "Nama file belum tersedia",
+        fileSizeLabel: preview?.fileSizeLabel || "Belum tersedia"
+      });
+      setTargetDestination(url.trim());
     } catch (err) {
-      setError("Terjadi kesalahan saat memproses link. Coba muat ulang halaman.");
+      setError(err instanceof Error ? err.message : "Gagal mendeteksi link.");
     } finally {
       setLoading(false);
     }
@@ -80,6 +77,7 @@ export default function BypasserPage() {
   const resetForm = () => {
     setUrl("");
     setTargetDestination("");
+    setDetectedInfo(null);
     setError("");
   };
 
@@ -108,7 +106,7 @@ export default function BypasserPage() {
         <div className="w-full bg-[#111827] border border-gray-800 p-6 md:p-8 rounded-3xl shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80%] h-[2px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-50"></div>
 
-          {!targetDestination ? (
+          {!detectedInfo ? (
             /* Form Input */
             <form onSubmit={handleBypass} className="flex flex-col gap-5">
               <div className="relative">
@@ -127,7 +125,7 @@ export default function BypasserPage() {
                 disabled={loading}
                 className="w-full bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-900 font-bold text-lg py-4 rounded-2xl transition-all transform hover:scale-[1.01] disabled:opacity-50 disabled:hover:scale-100 flex justify-center items-center gap-2"
               >
-                {loading ? "Mengekstrak Link Tujuan..." : "Bypass Sekarang →"}
+                {loading ? "Mendeteksi Link..." : "Deteksi Link →"}
               </button>
             </form>
           ) : (
@@ -136,11 +134,33 @@ export default function BypasserPage() {
               <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center text-emerald-400 text-2xl mb-4">
                 ✓
               </div>
-              <h3 className="text-xl font-bold text-gray-100 mb-1">Link Berhasil Ditemukan!</h3>
-              <p className="text-gray-400 text-xs mb-6 text-center">Berikut link tujuan akhir tanpa melewati iklan:</p>
+              <h3 className="text-xl font-bold text-gray-100 mb-1">Link Berhasil Dideteksi!</h3>
+              <p className="text-gray-400 text-xs mb-6 text-center">Informasi tautan yang berhasil dikenali:</p>
 
-              <div className="w-full bg-[#0a0f16] p-4 rounded-2xl border border-emerald-500/30 break-all text-emerald-400 font-mono text-sm mb-6 text-center select-all shadow-inner">
-                {targetDestination}
+              <div className="w-full bg-[#0a0f16] p-4 rounded-2xl border border-emerald-500/30 text-sm mb-6 shadow-inner space-y-3">
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-400">Platform</span>
+                  <span className="text-emerald-400 font-semibold">{detectedInfo?.label}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-400">Jenis file</span>
+                  <span className="text-gray-200">{detectedInfo?.fileType || "Belum diketahui"}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-400">Nama file</span>
+                  <span className="text-gray-200 text-right break-all">{detectedInfo?.fileName}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-400">Ukuran file</span>
+                  <span className="text-gray-200">{detectedInfo?.fileSizeLabel}</span>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-gray-400">Tautan langsung</span>
+                  <span className="text-gray-200">{detectedInfo?.isDirectFile ? "Ya" : "Tidak terdeteksi"}</span>
+                </div>
+                <div className="border-t border-gray-700 pt-3 break-all text-emerald-400 font-mono text-xs">
+                  {targetDestination}
+                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 w-full justify-center mb-4">
@@ -157,7 +177,7 @@ export default function BypasserPage() {
                   rel="noopener noreferrer"
                   className="flex-1 bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-950 py-3.5 px-6 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
                 >
-                  🚀 Buka Halaman Tujuan
+                  ↗ Buka Link Asli
                 </a>
               </div>
 
@@ -165,7 +185,7 @@ export default function BypasserPage() {
                 onClick={resetForm}
                 className="text-xs text-gray-400 hover:text-gray-200 underline mt-2 transition-colors"
               >
-                ← Bypass Link Lainnya
+                ← Periksa Link Lainnya
               </button>
             </div>
           )}
@@ -178,7 +198,7 @@ export default function BypasserPage() {
         </div>
 
         <p className="text-gray-500 text-sm mt-10 text-center max-w-lg">
-          Support untuk Linkvertise, Workink, Sub2Unlock, Booster, dan shortener langsung lainnya.
+          Deteksi Direct Link, Google Drive, MediaFire, Dropbox, GitHub, Linkvertise, Workink, dan Sub2Unlock.
         </p>
       </div>
     </div>

@@ -1,45 +1,67 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const MAX_URL_LENGTH = 2048;
+
+function isValidTarget(value: string) {
+  try {
+    const url = new URL(value);
+
+    if (!["http:", "https:"].includes(url.protocol)) return false;
+    if (url.username || url.password) return false;
+
+    const hostname = url.hostname.toLowerCase();
+
+    if (
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("169.254.") ||
+      hostname.endsWith(".local")
+    ) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const targetUrl = searchParams.get("url");
 
   if (!targetUrl) {
-    return NextResponse.json({ error: "Masukkan link yang ingin di-bypass." }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: "URL wajib diisi." },
+      { status: 400 }
+    );
   }
 
-  // Daftar API dari yang paling kuat (KeyBypass jadi prioritas pertama)
-  const providers = [
-    `https://api.keybypass.net/bypass?url=${encodeURIComponent(targetUrl)}&hwid=`,
-    `https://api.bypass.vip/bypass?url=${encodeURIComponent(targetUrl)}`,
-    `https://api.bypass.city/bypass?url=${encodeURIComponent(targetUrl)}`,
-    `https://api.ethosservices.xyz/bypass?url=${encodeURIComponent(targetUrl)}`
-  ];
+  if (
+    targetUrl.length > MAX_URL_LENGTH ||
+    !isValidTarget(targetUrl)
+  ) {
+    return NextResponse.json(
+      { success: false, error: "Format URL tidak valid atau tidak diizinkan." },
+      { status: 400 }
+    );
+  }
 
-  for (const apiUrl of providers) {
-    try {
-      const res = await fetch(apiUrl, {
-        headers: { 
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)",
-          "Accept": "application/json"
-        },
-        signal: AbortSignal.timeout(12000) // Maksimal nunggu 12 detik per API
-      });
-
-      if (!res.ok) continue;
-
-      const data = await res.json();
-      
-      // Menangkap format output dari berbagai API (Keybypass pakai 'destination')
-      const resultUrl = data.destination || data.result || data.bypassed_link || data.url;
-
-      if (resultUrl && resultUrl.startsWith("http")) {
-        return NextResponse.json({ success: true, result: resultUrl });
-      }
-    } catch (e) {
-      continue; // Lanjut ke API berikutnya jika gagal/timeout
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Endpoint sedang dibatasi untuk pemeriksaan keamanan. Gunakan tautan tujuan yang dapat diakses secara langsung."
+    },
+    {
+      status: 503,
+      headers: { "Cache-Control": "no-store" }
     }
-  }
-
-  return NextResponse.json({ error: "Semua server bypass gagal atau sedang down. Coba lagi nanti." }, { status: 502 });
+  );
 }

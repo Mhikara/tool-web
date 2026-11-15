@@ -8,11 +8,11 @@ export type DownloaderTool = {
 
 export const downloaderTools: DownloaderTool[] = [
   {
-    slug: "terabox",
-    title: "Terabox Downloader",
-    description: "Ambil file dari link share Terabox",
-    tag: "FILE",
-    icon: "📦",
+    slug: "twitter",
+    title: "X/Twitter Downloader",
+    description: "Download video dari postingan X/Twitter publik",
+    tag: "MP4",
+    icon: "𝕏",
   },
   {
     slug: "instagram",
