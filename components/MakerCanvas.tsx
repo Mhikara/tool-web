@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
+import QRStudio from "./QRStudio";
 
 const MAKERS: Record<string, { title: string; description: string }> = {
   "qr-code-maker": {
@@ -192,6 +193,8 @@ export default function MakerCanvas({ slug }: { slug: string }) {
     background, foreground, imageUrl, shape, format, width, height,
     isQR, isMeme, isSticker, isLogo, isSocial,
   ]);
+
+  if (slug === "qr-code-maker") return <QRStudio />;
 
   const handleImage = (file?: File) => {
     if (!file) return;

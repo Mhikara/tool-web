@@ -8,6 +8,7 @@ export default function BypasserPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [resolved, setResolved] = useState(false);
   const [detectedInfo, setDetectedInfo] = useState<{
     platform: string;
     label: string;
@@ -27,6 +28,7 @@ export default function BypasserPage() {
     setTargetDestination("");
     setDetectedInfo(null);
     setCopied(false);
+    setResolved(false);
 
     try {
       const res = await fetch(
@@ -55,12 +57,41 @@ export default function BypasserPage() {
         preview = null;
       }
 
+      let destination = url.trim();
+      let wasResolved = false;
+
+      const hostname = new URL(url.trim()).hostname.toLowerCase();
+      const shortenerHosts = [
+        "bit.ly",
+        "tinyurl.com",
+        "www.tinyurl.com",
+        "is.gd",
+        "v.gd",
+        "rebrand.ly"
+      ];
+
+      if (shortenerHosts.includes(hostname)) {
+        const resolverRes = await fetch(
+          `/api/bypass?url=${encodeURIComponent(url.trim())}`,
+          { method: "GET", cache: "no-store" }
+        );
+        const resolverData = await resolverRes.json();
+
+        if (!resolverRes.ok || !resolverData.success || !resolverData.data?.destinationUrl) {
+          throw new Error(resolverData.error || "Gagal menyelesaikan shortlink.");
+        }
+
+        destination = resolverData.data.destinationUrl;
+        wasResolved = true;
+      }
+
       setDetectedInfo({
         ...data.data,
         fileName: preview?.fileName || "Nama file belum tersedia",
         fileSizeLabel: preview?.fileSizeLabel || "Belum tersedia"
       });
-      setTargetDestination(url.trim());
+      setTargetDestination(destination);
+      setResolved(wasResolved);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mendeteksi link.");
     } finally {
@@ -134,8 +165,8 @@ export default function BypasserPage() {
               <div className="w-14 h-14 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center text-emerald-400 text-2xl mb-4">
                 ✓
               </div>
-              <h3 className="text-xl font-bold text-gray-100 mb-1">Link Berhasil Dideteksi!</h3>
-              <p className="text-gray-400 text-xs mb-6 text-center">Informasi tautan yang berhasil dikenali:</p>
+              <h3 className="text-xl font-bold text-gray-100 mb-1">{resolved ? "Link Berhasil Diselesaikan!" : "Link Berhasil Dideteksi!"}</h3>
+              <p className="text-gray-400 text-xs mb-6 text-center">{resolved ? "URL tujuan berhasil ditemukan." : "Platform dikenali, tetapi resolver belum tersedia untuk link ini."}</p>
 
               <div className="w-full bg-[#0a0f16] p-4 rounded-2xl border border-emerald-500/30 text-sm mb-6 shadow-inner space-y-3">
                 <div className="flex justify-between gap-3">
@@ -168,7 +199,7 @@ export default function BypasserPage() {
                   onClick={copyResult}
                   className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-3.5 px-6 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 border border-gray-700"
                 >
-                  {copied ? "✓ Link Tersalin!" : "📋 Salin Link Tujuan"}
+                  {copied ? "✓ Link Tersalin!" : resolved ? "📋 Salin Link Tujuan" : "📋 Salin Link"}
                 </button>
 
                 <a
@@ -177,7 +208,7 @@ export default function BypasserPage() {
                   rel="noopener noreferrer"
                   className="flex-1 bg-gradient-to-r from-emerald-400 to-cyan-500 hover:from-emerald-300 hover:to-cyan-400 text-gray-950 py-3.5 px-6 rounded-xl font-bold transition-all text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
                 >
-                  ↗ Buka Link Asli
+                  {resolved ? "↗ Buka Link Tujuan" : "↗ Buka Link"}
                 </a>
               </div>
 
@@ -198,7 +229,7 @@ export default function BypasserPage() {
         </div>
 
         <p className="text-gray-500 text-sm mt-10 text-center max-w-lg">
-          Deteksi Direct Link, Google Drive, MediaFire, Dropbox, GitHub, Linkvertise, Workink, dan Sub2Unlock.
+          Deteksi link dan resolver shortlink: Bitly, TinyURL, is.gd, v.gd, dan Rebrandly.
         </p>
       </div>
     </div>
