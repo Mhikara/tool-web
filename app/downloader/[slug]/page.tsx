@@ -277,26 +277,19 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
                     </div>
                   </div>
                 </div>
-                {ytInfo.videoFormats && ytInfo.videoFormats.length > 0 && (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#A78BFA", marginBottom: 8 }}>VIDEO MP4</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {ytInfo.videoFormats.map((f: any) => (
-                        <button key={f.itag} type="button" disabled={loading} onClick={() => handleYoutubeDownload("mp4", f.itag)}
-                          style={{ ...btnStyle, background: "#374151", padding: "10px 14px", fontSize: 13, display: "flex", justifyContent: "space-between" }}>
-                          <span>{f.quality}{f.fps ? " · " + f.fps + "fps" : ""} · Audio</span>
-                          <span style={{ fontSize: 11, opacity: 0.7 }}>{f.size || "Download"}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#F472B6", marginBottom: 8 }}>AUDIO MP3</div>
-                  <button type="button" disabled={loading} onClick={() => handleYoutubeDownload("mp3")} style={{ ...btnStyle, background: "#EC4899", padding: "10px 14px", fontSize: 13 }}>
-                    Download Audio (MP3)
-                  </button>
+                <div style={{ width: "100%", aspectRatio: "16 / 9", overflow: "hidden", borderRadius: 10, background: "#000" }}>
+                  <iframe
+                    src={ytInfo.embedUrl || `https://www.youtube-nocookie.com/embed/${ytInfo.id}`}
+                    title={ytInfo.title || "YouTube video"}
+                    style={{ width: "100%", height: "100%", border: 0 }}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allowFullScreen
+                  />
                 </div>
+                <p style={{ fontSize: 11, color: "#9C90AC", lineHeight: 1.6, marginTop: 12 }}>
+                  Pemutaran menggunakan YouTube resmi. Download langsung tidak tersedia di sini. Gunakan fitur download dari pemilik video atau sumber yang Anda punya izin untuk mengunduhnya.
+                </p>
               </div>
             )}
           </>
@@ -459,7 +452,23 @@ export default function DownloaderDetail({ params }: { params: Promise<{ slug: s
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700 }}>{t.name}</div>
                   <div style={{ fontSize: 11, color: "#9C90AC" }}>{t.artist}</div>
-                  {t.previewUrl && <audio controls src={t.previewUrl} style={{ width: "100%", marginTop: 6, height: 32 }} />}
+                  {t.id && (
+                    <iframe
+                      src={`https://open.spotify.com/embed/track/${encodeURIComponent(t.id)}`}
+                      title={`Spotify player: ${t.name}`}
+                      width="100%"
+                      height="152"
+                      style={{ border: 0, borderRadius: 10, marginTop: 8 }}
+                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                      loading="lazy"
+                    />
+                  )}
+                  {t.spotifyUrl && (
+                    <a href={t.spotifyUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ display: "inline-block", marginTop: 8, color: "#1DB954", fontSize: 12 }}>
+                      Buka di Spotify
+                    </a>
+                  )}
                 </div>
               </div>
             ))}

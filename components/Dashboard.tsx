@@ -8,19 +8,6 @@ import {
   type DownloadRecord,
 } from "@/lib/localDownloadDb";
 import { downloaderTools } from "@/lib/downloaderTools";
-import { makerTools } from "@/lib/makerTools";
-import { externalTools } from "@/lib/externalTools";
-import { toolsList } from "@/lib/toolsList";
-
-type TabKey = "all" | "downloader" | "maker" | "tools" | "external";
-
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "all", label: "Semua" },
-  { key: "downloader", label: "Downloader" },
-  { key: "maker", label: "Maker" },
-  { key: "tools", label: "Tools" },
-  { key: "external", label: "External" },
-];
 
 function ToolCard({
   href,
@@ -54,58 +41,28 @@ function ToolCard({
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="mb-8">
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-        {title}
-      </h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{children}</div>
-    </section>
-  );
-}
-
 export default function Dashboard() {
-  const [tab, setTab] = useState<TabKey>("all");
   const [history, setHistory] = useState<DownloadRecord[]>([]);
   const [q, setQ] = useState("");
 
   useEffect(() => {
     setHistory(listDownloads());
-  }, [tab]);
+  }, []);
 
-  const query = q.trim().toLowerCase();
+  const filteredDownloads = useMemo(() => {
+    const query = q.trim().toLowerCase();
 
-  const filterTools = <T extends { title: string; description: string }>(
-    list: T[]
-  ) =>
-    !query
-      ? list
-      : list.filter(
-          (t) =>
-            t.title.toLowerCase().includes(query) ||
-            t.description.toLowerCase().includes(query)
-        );
+    if (!query) return downloaderTools;
 
-  const dl = useMemo(() => filterTools(downloaderTools), [query]);
-  const mk = useMemo(() => filterTools(makerTools), [query]);
-  const ex = useMemo(() => filterTools(externalTools), [query]);
-  const tl = useMemo(() => filterTools(toolsList), [query]);
-
-  const showDl = tab === "all" || tab === "downloader";
-  const showMk = tab === "all" || tab === "maker";
-  const showEx = tab === "all" || tab === "external";
-  const showTl = tab === "all" || tab === "tools";
+    return downloaderTools.filter(
+      (tool) =>
+        tool.title.toLowerCase().includes(query) ||
+        tool.description.toLowerCase().includes(query)
+    );
+  }, [q]);
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100">
-      {/* Header */}
       <header className="sticky top-0 z-40 border-b border-white/5 bg-[#09090b]/85 backdrop-blur-xl">
         <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-xs font-black shadow-lg shadow-violet-500/20">
@@ -113,7 +70,7 @@ export default function Dashboard() {
           </div>
           <div className="flex-1">
             <p className="text-sm font-bold leading-none">Tool Web</p>
-            <p className="text-[10px] text-zinc-500">All tools hub</p>
+            <p className="text-[10px] text-zinc-500">All Downloader</p>
           </div>
           <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-400">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -123,147 +80,116 @@ export default function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-5">
-        {/* Search */}
         <div className="mb-5">
+          <h1 className="mb-2 text-xl font-bold">Semua Downloader</h1>
+          <p className="text-xs text-zinc-500">
+            Pilih platform untuk mengunduh media.
+          </p>
+        </div>
+
+        <div className="mb-6">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Cari tool..."
+            placeholder="Cari platform downloader..."
             className="w-full rounded-2xl border-0 bg-zinc-900/80 px-4 py-3 text-sm outline-none ring-1 ring-white/10 placeholder:text-zinc-600 focus:ring-violet-500/40"
           />
         </div>
 
-        {/* Tabs */}
-        <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={
-                "shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition " +
-                (tab === t.key
-                  ? "bg-white text-zinc-900"
-                  : "bg-zinc-900 text-zinc-400 ring-1 ring-white/5 hover:text-zinc-200")
-              }
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Grid sections */}
-        {showDl && dl.length > 0 && (
-          <Section title="Downloader">
-            {dl.map((tool) => (
-              <ToolCard
-                key={tool.slug}
-                href={`/downloader/${tool.slug}`}
-                icon={tool.icon}
-                title={tool.title}
-                desc={tool.description}
-                tag={tool.tag}
-              />
-            ))}
-          </Section>
-        )}
-
-        {showMk && mk.length > 0 && (
-          <Section title="Maker">
-            {mk.map((tool) => (
-              <ToolCard
-                key={tool.slug}
-                href={`/maker/${tool.slug}`}
-                icon={tool.icon}
-                title={tool.title}
-                desc={tool.description}
-                tag={tool.tag}
-              />
-            ))}
-          </Section>
-        )}
-
-        {showTl && tl.length > 0 && (
-          <Section title="Tools">
-            {tl.map((tool) => (
-              <ToolCard
-                key={tool.slug}
-                href={tool.href}
-                icon={tool.icon}
-                title={tool.title}
-                desc={tool.description}
-                tag={tool.tag}
-              />
-            ))}
-          </Section>
-        )}
-
-        {showEx && ex.length > 0 && (
-          <Section title="External">
-            {ex.map((tool) => (
-              <ToolCard
-                key={tool.slug}
-                href={`/external/${tool.slug}`}
-                icon={tool.icon}
-                title={tool.title}
-                desc={tool.description}
-                tag={tool.tag}
-              />
-            ))}
-          </Section>
-        )}
-
-        {/* History — ringkas */}
-        {(tab === "all" || tab === "downloader") && (
-          <section className="mb-8 rounded-2xl bg-zinc-900/40 p-4 ring-1 ring-white/5">
+        {filteredDownloads.length > 0 ? (
+          <section className="mb-8">
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                Riwayat download
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                Downloader
+              </h2>
+              <span className="text-[11px] text-zinc-600">
+                {filteredDownloads.length} platform
               </span>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-zinc-600">{history.length}</span>
-                {history.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      clearDownloads();
-                      setHistory([]);
-                    }}
-                    className="text-[11px] text-zinc-500 hover:text-zinc-300"
-                  >
-                    Hapus
-                  </button>
-                )}
-              </div>
             </div>
-            {history.length === 0 ? (
-              <p className="text-center text-xs text-zinc-600">
-                Belum ada riwayat di perangkat ini
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {history.slice(0, 8).map((h) => (
-                  <li
-                    key={h.id}
-                    className="rounded-xl bg-black/20 px-3 py-2 text-xs"
-                  >
-                    <p className="font-medium text-zinc-200">
-                      {h.title || "Tanpa judul"}
-                    </p>
-                    <p className="text-zinc-600">
-                      {h.platform} · {h.mediaType}
-                      {h.quality ? " · " + h.quality : ""}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {filteredDownloads.map((tool) => (
+                <ToolCard
+                  key={tool.slug}
+                  href={`/downloader/${tool.slug}`}
+                  icon={tool.icon}
+                  title={tool.title}
+                  desc={tool.description}
+                  tag={tool.tag}
+                />
+              ))}
+            </div>
           </section>
+        ) : (
+          <p className="py-10 text-center text-sm text-zinc-500">
+            Platform downloader tidak ditemukan.
+          </p>
         )}
+
+        <section className="mb-8">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            Bypass
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <ToolCard
+              href="/bypasser"
+              icon="🔓"
+              title="Premium Bypasser"
+              desc="Deteksi dan selesaikan shortlink"
+              tag="BYPASS"
+            />
+          </div>
+        </section>
+
+        <section className="mb-8 rounded-2xl bg-zinc-900/40 p-4 ring-1 ring-white/5">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Riwayat download
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-zinc-600">
+                {history.length}
+              </span>
+              {history.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearDownloads();
+                    setHistory([]);
+                  }}
+                  className="text-[11px] text-zinc-500 hover:text-zinc-300"
+                >
+                  Hapus
+                </button>
+              )}
+            </div>
+          </div>
+
+          {history.length === 0 ? (
+            <p className="text-center text-xs text-zinc-600">
+              Belum ada riwayat di perangkat ini
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {history.slice(0, 8).map((item) => (
+                <li
+                  key={item.id}
+                  className="rounded-xl bg-black/20 px-3 py-2 text-xs"
+                >
+                  <p className="font-medium text-zinc-200">
+                    {item.title || "Tanpa judul"}
+                  </p>
+                  <p className="text-zinc-600">
+                    {item.platform} · {item.mediaType}
+                    {item.quality ? " · " + item.quality : ""}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
         <footer className="border-t border-white/5 py-8 text-center text-[11px] text-zinc-600">
-          Tool Web · Developer by{" "}
-          <span className="font-semibold text-violet-400/90">Meydi</span>
+          Tool Web · Downloader
         </footer>
       </main>
     </div>
